@@ -1,0 +1,12 @@
+[project]
+name = "the-brownfield-cartographer"
+version = "0.1.0"
+description = """TRP 1 Week 4: The Brownfield Cartographer
+Engineering Codebase Intelligence Systems for Rapid FDE Onboarding in Production Environments
+"""
+authors = [
+    { name = "Yonas Mekonnen", email = "myonas886@gmail.com" }
+]
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = []
