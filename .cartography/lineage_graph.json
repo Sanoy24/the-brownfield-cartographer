@@ -1,0 +1,146 @@
+{
+  "directed": true,
+  "multigraph": false,
+  "graph": {},
+  "nodes": [
+    {
+      "node_type": "dataset",
+      "storage_type": "table",
+      "is_source_of_truth": false,
+      "id": "customers"
+    },
+    {
+      "node_type": "dataset",
+      "storage_type": "table",
+      "is_source_of_truth": false,
+      "id": "orders"
+    },
+    {
+      "node_type": "dataset",
+      "storage_type": "table",
+      "is_source_of_truth": false,
+      "id": "stg_customers"
+    },
+    {
+      "node_type": "dataset",
+      "storage_type": "table",
+      "is_source_of_truth": false,
+      "id": "stg_orders"
+    },
+    {
+      "node_type": "dataset",
+      "storage_type": "table",
+      "is_source_of_truth": false,
+      "id": "stg_payments"
+    },
+    {
+      "node_type": "transformation",
+      "transformation_type": "dbt_model",
+      "source_file": "models/customers.sql",
+      "id": "tx:models/customers.sql:1-70"
+    },
+    {
+      "node_type": "transformation",
+      "transformation_type": "dbt_model",
+      "source_file": "models/orders.sql",
+      "id": "tx:models/orders.sql:1-57"
+    },
+    {
+      "node_type": "transformation",
+      "transformation_type": "dbt_model",
+      "source_file": "models/staging/stg_customers.sql",
+      "id": "tx:models/staging/stg_customers.sql:1-23"
+    },
+    {
+      "node_type": "dataset",
+      "id": "raw_customers"
+    },
+    {
+      "node_type": "transformation",
+      "transformation_type": "dbt_model",
+      "source_file": "models/staging/stg_orders.sql",
+      "id": "tx:models/staging/stg_orders.sql:1-24"
+    },
+    {
+      "node_type": "dataset",
+      "id": "raw_orders"
+    },
+    {
+      "node_type": "transformation",
+      "transformation_type": "dbt_model",
+      "source_file": "models/staging/stg_payments.sql",
+      "id": "tx:models/staging/stg_payments.sql:1-26"
+    },
+    {
+      "node_type": "dataset",
+      "id": "raw_payments"
+    }
+  ],
+  "edges": [
+    {
+      "edge_type": "CONSUMES",
+      "source": "stg_customers",
+      "target": "tx:models/customers.sql:1-70"
+    },
+    {
+      "edge_type": "CONSUMES",
+      "source": "stg_orders",
+      "target": "tx:models/customers.sql:1-70"
+    },
+    {
+      "edge_type": "CONSUMES",
+      "source": "stg_orders",
+      "target": "tx:models/orders.sql:1-57"
+    },
+    {
+      "edge_type": "CONSUMES",
+      "source": "stg_payments",
+      "target": "tx:models/customers.sql:1-70"
+    },
+    {
+      "edge_type": "CONSUMES",
+      "source": "stg_payments",
+      "target": "tx:models/orders.sql:1-57"
+    },
+    {
+      "edge_type": "PRODUCES",
+      "source": "tx:models/customers.sql:1-70",
+      "target": "customers"
+    },
+    {
+      "edge_type": "PRODUCES",
+      "source": "tx:models/orders.sql:1-57",
+      "target": "orders"
+    },
+    {
+      "edge_type": "PRODUCES",
+      "source": "tx:models/staging/stg_customers.sql:1-23",
+      "target": "stg_customers"
+    },
+    {
+      "edge_type": "CONSUMES",
+      "source": "raw_customers",
+      "target": "tx:models/staging/stg_customers.sql:1-23"
+    },
+    {
+      "edge_type": "PRODUCES",
+      "source": "tx:models/staging/stg_orders.sql:1-24",
+      "target": "stg_orders"
+    },
+    {
+      "edge_type": "CONSUMES",
+      "source": "raw_orders",
+      "target": "tx:models/staging/stg_orders.sql:1-24"
+    },
+    {
+      "edge_type": "PRODUCES",
+      "source": "tx:models/staging/stg_payments.sql:1-26",
+      "target": "stg_payments"
+    },
+    {
+      "edge_type": "CONSUMES",
+      "source": "raw_payments",
+      "target": "tx:models/staging/stg_payments.sql:1-26"
+    }
+  ]
+}
