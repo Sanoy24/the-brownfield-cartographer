@@ -5,339 +5,119 @@
   "nodes": [
     {
       "node_type": "dataset",
-      "storage_type": "table",
-      "is_source_of_truth": false,
-      "id": "stg_order_items"
+      "id": "ol_warehouse_production_dimensional.tfact_video_events"
     },
     {
       "node_type": "dataset",
-      "storage_type": "table",
-      "is_source_of_truth": true,
-      "id": "ecom.raw_stores"
+      "id": "ol_warehouse_production_dimensional.tfact_problem_events"
     },
     {
       "node_type": "dataset",
-      "id": "products"
+      "id": "ol_warehouse_production_dimensional.dim_problem"
+    },
+    {
+      "node_type": "dataset",
+      "id": "ol_warehouse_production_intermediate.int__combined__course_runs"
+    },
+    {
+      "node_type": "dataset",
+      "id": "ol_warehouse_production_dimensional.dim_user"
+    },
+    {
+      "node_type": "dataset",
+      "id": "ol_warehouse_production_dimensional.dim_discussion_topic"
+    },
+    {
+      "node_type": "dataset",
+      "id": "learner_engagement_report"
+    },
+    {
+      "node_type": "dataset",
+      "id": "ol_warehouse_production_dimensional.afact_course_page_engagement"
+    },
+    {
+      "node_type": "dataset",
+      "id": "ol_warehouse_production_dimensional.afact_problem_engagement"
+    },
+    {
+      "node_type": "dataset",
+      "id": "ol_warehouse_production_dimensional.afact_discussion_engagement"
+    },
+    {
+      "node_type": "dataset",
+      "id": "ol_warehouse_production_dimensional.dim_video"
     },
     {
       "node_type": "transformation",
-      "transformation_type": "dbt_model",
-      "source_file": "models/staging/stg_order_items.sql",
-      "id": "tx:models/staging/stg_order_items.sql:1-23"
-    },
-    {
-      "node_type": "transformation",
-      "transformation_type": "dbt_model",
-      "source_file": "models/staging/stg_orders.sql",
-      "id": "tx:models/staging/stg_orders.sql:1-34"
-    },
-    {
-      "node_type": "transformation",
-      "transformation_type": "dbt_model",
-      "source_file": "models/staging/stg_supplies.sql",
-      "id": "tx:models/staging/stg_supplies.sql:1-32"
+      "transformation_type": "sql_query",
+      "source_file": "src/ol_dbt/models/reporting/learner_engagement_report.sql",
+      "id": "tx:src/ol_dbt/models/reporting/learner_engagement_report.sql:1-386"
     },
     {
       "node_type": "dataset",
-      "storage_type": "table",
-      "is_source_of_truth": true,
-      "id": "ecom.raw_products"
-    },
-    {
-      "node_type": "transformation",
-      "transformation_type": "dbt_model",
-      "source_file": "models/staging/stg_products.sql",
-      "id": "tx:models/staging/stg_products.sql:1-35"
-    },
-    {
-      "node_type": "transformation",
-      "transformation_type": "dbt_model",
-      "source_file": "models/marts/supplies.sql",
-      "id": "tx:models/marts/supplies.sql:1-10"
-    },
-    {
-      "node_type": "dataset",
-      "storage_type": "table",
-      "is_source_of_truth": true,
-      "id": "ecom.raw_items"
-    },
-    {
-      "node_type": "dataset",
-      "id": "metricflow_time_spine"
-    },
-    {
-      "node_type": "dataset",
-      "storage_type": "table",
-      "is_source_of_truth": false,
-      "id": "stg_customers"
-    },
-    {
-      "node_type": "dataset",
-      "storage_type": "table",
-      "is_source_of_truth": false,
-      "id": "stg_locations"
-    },
-    {
-      "node_type": "dataset",
-      "storage_type": "table",
-      "is_source_of_truth": true,
-      "id": "ecom.raw_orders"
-    },
-    {
-      "node_type": "dataset",
-      "storage_type": "table",
-      "is_source_of_truth": false,
-      "id": "stg_orders"
-    },
-    {
-      "node_type": "dataset",
-      "storage_type": "table",
-      "is_source_of_truth": false,
-      "id": "orders"
-    },
-    {
-      "node_type": "dataset",
-      "storage_type": "table",
-      "is_source_of_truth": false,
-      "id": "stg_supplies"
-    },
-    {
-      "node_type": "transformation",
-      "transformation_type": "dbt_model",
-      "source_file": "models/marts/locations.sql",
-      "id": "tx:models/marts/locations.sql:1-10"
-    },
-    {
-      "node_type": "transformation",
-      "transformation_type": "dbt_model",
-      "source_file": "models/staging/stg_locations.sql",
-      "id": "tx:models/staging/stg_locations.sql:1-30"
-    },
-    {
-      "node_type": "dataset",
-      "storage_type": "table",
-      "is_source_of_truth": true,
-      "id": "ecom.raw_customers"
-    },
-    {
-      "node_type": "transformation",
-      "transformation_type": "dbt_model",
-      "source_file": "models/marts/orders.sql",
-      "id": "tx:models/marts/orders.sql:1-78"
-    },
-    {
-      "node_type": "transformation",
-      "transformation_type": "dbt_model",
-      "source_file": "models/marts/products.sql",
-      "id": "tx:models/marts/products.sql:1-10"
-    },
-    {
-      "node_type": "transformation",
-      "transformation_type": "dbt_model",
-      "source_file": "models/marts/customers.sql",
-      "id": "tx:models/marts/customers.sql:1-59"
-    },
-    {
-      "node_type": "dataset",
-      "id": "supplies"
-    },
-    {
-      "node_type": "dataset",
-      "storage_type": "table",
-      "is_source_of_truth": false,
-      "id": "stg_products"
-    },
-    {
-      "node_type": "dataset",
-      "storage_type": "table",
-      "is_source_of_truth": false,
-      "id": "customers"
-    },
-    {
-      "node_type": "dataset",
-      "storage_type": "table",
-      "is_source_of_truth": true,
-      "id": "ecom.raw_supplies"
-    },
-    {
-      "node_type": "dataset",
-      "storage_type": "table",
-      "is_source_of_truth": false,
-      "id": "order_items"
-    },
-    {
-      "node_type": "dataset",
-      "id": "locations"
-    },
-    {
-      "node_type": "transformation",
-      "transformation_type": "dbt_model",
-      "source_file": "models/marts/order_items.sql",
-      "id": "tx:models/marts/order_items.sql:1-67"
-    },
-    {
-      "node_type": "transformation",
-      "transformation_type": "dbt_model",
-      "source_file": "models/marts/metricflow_time_spine.sql",
-      "id": "tx:models/marts/metricflow_time_spine.sql:1-20"
-    },
-    {
-      "node_type": "transformation",
-      "transformation_type": "dbt_model",
-      "source_file": "models/staging/stg_customers.sql",
-      "id": "tx:models/staging/stg_customers.sql:1-24"
+      "id": "ol_warehouse_production_dimensional.dim_course_content"
     }
   ],
   "edges": [
     {
       "edge_type": "CONSUMES",
-      "source": "stg_order_items",
-      "target": "tx:models/marts/order_items.sql:1-67"
+      "source": "ol_warehouse_production_dimensional.tfact_video_events",
+      "target": "tx:src/ol_dbt/models/reporting/learner_engagement_report.sql:1-386"
     },
     {
       "edge_type": "CONSUMES",
-      "source": "ecom.raw_stores",
-      "target": "tx:models/staging/stg_locations.sql:1-30"
+      "source": "ol_warehouse_production_dimensional.tfact_problem_events",
+      "target": "tx:src/ol_dbt/models/reporting/learner_engagement_report.sql:1-386"
+    },
+    {
+      "edge_type": "CONSUMES",
+      "source": "ol_warehouse_production_dimensional.dim_problem",
+      "target": "tx:src/ol_dbt/models/reporting/learner_engagement_report.sql:1-386"
+    },
+    {
+      "edge_type": "CONSUMES",
+      "source": "ol_warehouse_production_intermediate.int__combined__course_runs",
+      "target": "tx:src/ol_dbt/models/reporting/learner_engagement_report.sql:1-386"
+    },
+    {
+      "edge_type": "CONSUMES",
+      "source": "ol_warehouse_production_dimensional.dim_user",
+      "target": "tx:src/ol_dbt/models/reporting/learner_engagement_report.sql:1-386"
+    },
+    {
+      "edge_type": "CONSUMES",
+      "source": "ol_warehouse_production_dimensional.dim_discussion_topic",
+      "target": "tx:src/ol_dbt/models/reporting/learner_engagement_report.sql:1-386"
+    },
+    {
+      "edge_type": "CONSUMES",
+      "source": "ol_warehouse_production_dimensional.afact_course_page_engagement",
+      "target": "tx:src/ol_dbt/models/reporting/learner_engagement_report.sql:1-386"
+    },
+    {
+      "edge_type": "CONSUMES",
+      "source": "ol_warehouse_production_dimensional.afact_problem_engagement",
+      "target": "tx:src/ol_dbt/models/reporting/learner_engagement_report.sql:1-386"
+    },
+    {
+      "edge_type": "CONSUMES",
+      "source": "ol_warehouse_production_dimensional.afact_discussion_engagement",
+      "target": "tx:src/ol_dbt/models/reporting/learner_engagement_report.sql:1-386"
+    },
+    {
+      "edge_type": "CONSUMES",
+      "source": "ol_warehouse_production_dimensional.dim_video",
+      "target": "tx:src/ol_dbt/models/reporting/learner_engagement_report.sql:1-386"
     },
     {
       "edge_type": "PRODUCES",
-      "source": "tx:models/staging/stg_order_items.sql:1-23",
-      "target": "stg_order_items"
-    },
-    {
-      "edge_type": "PRODUCES",
-      "source": "tx:models/staging/stg_orders.sql:1-34",
-      "target": "stg_orders"
-    },
-    {
-      "edge_type": "PRODUCES",
-      "source": "tx:models/staging/stg_supplies.sql:1-32",
-      "target": "stg_supplies"
+      "source": "tx:src/ol_dbt/models/reporting/learner_engagement_report.sql:1-386",
+      "target": "learner_engagement_report"
     },
     {
       "edge_type": "CONSUMES",
-      "source": "ecom.raw_products",
-      "target": "tx:models/staging/stg_products.sql:1-35"
-    },
-    {
-      "edge_type": "PRODUCES",
-      "source": "tx:models/staging/stg_products.sql:1-35",
-      "target": "stg_products"
-    },
-    {
-      "edge_type": "PRODUCES",
-      "source": "tx:models/marts/supplies.sql:1-10",
-      "target": "supplies"
-    },
-    {
-      "edge_type": "CONSUMES",
-      "source": "ecom.raw_items",
-      "target": "tx:models/staging/stg_order_items.sql:1-23"
-    },
-    {
-      "edge_type": "CONSUMES",
-      "source": "stg_customers",
-      "target": "tx:models/marts/customers.sql:1-59"
-    },
-    {
-      "edge_type": "CONSUMES",
-      "source": "stg_locations",
-      "target": "tx:models/marts/locations.sql:1-10"
-    },
-    {
-      "edge_type": "CONSUMES",
-      "source": "ecom.raw_orders",
-      "target": "tx:models/staging/stg_orders.sql:1-34"
-    },
-    {
-      "edge_type": "CONSUMES",
-      "source": "stg_orders",
-      "target": "tx:models/marts/orders.sql:1-78"
-    },
-    {
-      "edge_type": "CONSUMES",
-      "source": "stg_orders",
-      "target": "tx:models/marts/order_items.sql:1-67"
-    },
-    {
-      "edge_type": "CONSUMES",
-      "source": "orders",
-      "target": "tx:models/marts/customers.sql:1-59"
-    },
-    {
-      "edge_type": "CONSUMES",
-      "source": "stg_supplies",
-      "target": "tx:models/marts/order_items.sql:1-67"
-    },
-    {
-      "edge_type": "CONSUMES",
-      "source": "stg_supplies",
-      "target": "tx:models/marts/supplies.sql:1-10"
-    },
-    {
-      "edge_type": "PRODUCES",
-      "source": "tx:models/marts/locations.sql:1-10",
-      "target": "locations"
-    },
-    {
-      "edge_type": "PRODUCES",
-      "source": "tx:models/staging/stg_locations.sql:1-30",
-      "target": "stg_locations"
-    },
-    {
-      "edge_type": "CONSUMES",
-      "source": "ecom.raw_customers",
-      "target": "tx:models/staging/stg_customers.sql:1-24"
-    },
-    {
-      "edge_type": "PRODUCES",
-      "source": "tx:models/marts/orders.sql:1-78",
-      "target": "orders"
-    },
-    {
-      "edge_type": "PRODUCES",
-      "source": "tx:models/marts/products.sql:1-10",
-      "target": "products"
-    },
-    {
-      "edge_type": "PRODUCES",
-      "source": "tx:models/marts/customers.sql:1-59",
-      "target": "customers"
-    },
-    {
-      "edge_type": "CONSUMES",
-      "source": "stg_products",
-      "target": "tx:models/marts/order_items.sql:1-67"
-    },
-    {
-      "edge_type": "CONSUMES",
-      "source": "stg_products",
-      "target": "tx:models/marts/products.sql:1-10"
-    },
-    {
-      "edge_type": "CONSUMES",
-      "source": "ecom.raw_supplies",
-      "target": "tx:models/staging/stg_supplies.sql:1-32"
-    },
-    {
-      "edge_type": "CONSUMES",
-      "source": "order_items",
-      "target": "tx:models/marts/orders.sql:1-78"
-    },
-    {
-      "edge_type": "PRODUCES",
-      "source": "tx:models/marts/order_items.sql:1-67",
-      "target": "order_items"
-    },
-    {
-      "edge_type": "PRODUCES",
-      "source": "tx:models/marts/metricflow_time_spine.sql:1-20",
-      "target": "metricflow_time_spine"
-    },
-    {
-      "edge_type": "PRODUCES",
-      "source": "tx:models/staging/stg_customers.sql:1-24",
-      "target": "stg_customers"
+      "source": "ol_warehouse_production_dimensional.dim_course_content",
+      "target": "tx:src/ol_dbt/models/reporting/learner_engagement_report.sql:1-386"
     }
   ]
 }
