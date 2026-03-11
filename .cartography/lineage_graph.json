@@ -7,13 +7,63 @@
       "node_type": "dataset",
       "storage_type": "table",
       "is_source_of_truth": false,
-      "id": "customers"
+      "id": "stg_order_items"
     },
     {
       "node_type": "dataset",
       "storage_type": "table",
-      "is_source_of_truth": false,
-      "id": "orders"
+      "is_source_of_truth": true,
+      "id": "ecom.raw_stores"
+    },
+    {
+      "node_type": "dataset",
+      "id": "products"
+    },
+    {
+      "node_type": "transformation",
+      "transformation_type": "dbt_model",
+      "source_file": "models/staging/stg_order_items.sql",
+      "id": "tx:models/staging/stg_order_items.sql:1-23"
+    },
+    {
+      "node_type": "transformation",
+      "transformation_type": "dbt_model",
+      "source_file": "models/staging/stg_orders.sql",
+      "id": "tx:models/staging/stg_orders.sql:1-34"
+    },
+    {
+      "node_type": "transformation",
+      "transformation_type": "dbt_model",
+      "source_file": "models/staging/stg_supplies.sql",
+      "id": "tx:models/staging/stg_supplies.sql:1-32"
+    },
+    {
+      "node_type": "dataset",
+      "storage_type": "table",
+      "is_source_of_truth": true,
+      "id": "ecom.raw_products"
+    },
+    {
+      "node_type": "transformation",
+      "transformation_type": "dbt_model",
+      "source_file": "models/staging/stg_products.sql",
+      "id": "tx:models/staging/stg_products.sql:1-35"
+    },
+    {
+      "node_type": "transformation",
+      "transformation_type": "dbt_model",
+      "source_file": "models/marts/supplies.sql",
+      "id": "tx:models/marts/supplies.sql:1-10"
+    },
+    {
+      "node_type": "dataset",
+      "storage_type": "table",
+      "is_source_of_truth": true,
+      "id": "ecom.raw_items"
+    },
+    {
+      "node_type": "dataset",
+      "id": "metricflow_time_spine"
     },
     {
       "node_type": "dataset",
@@ -25,122 +75,269 @@
       "node_type": "dataset",
       "storage_type": "table",
       "is_source_of_truth": false,
+      "id": "stg_locations"
+    },
+    {
+      "node_type": "dataset",
+      "storage_type": "table",
+      "is_source_of_truth": true,
+      "id": "ecom.raw_orders"
+    },
+    {
+      "node_type": "dataset",
+      "storage_type": "table",
+      "is_source_of_truth": false,
       "id": "stg_orders"
     },
     {
       "node_type": "dataset",
       "storage_type": "table",
       "is_source_of_truth": false,
-      "id": "stg_payments"
+      "id": "orders"
+    },
+    {
+      "node_type": "dataset",
+      "storage_type": "table",
+      "is_source_of_truth": false,
+      "id": "stg_supplies"
     },
     {
       "node_type": "transformation",
       "transformation_type": "dbt_model",
-      "source_file": "models/customers.sql",
-      "id": "tx:models/customers.sql:1-70"
+      "source_file": "models/marts/locations.sql",
+      "id": "tx:models/marts/locations.sql:1-10"
     },
     {
       "node_type": "transformation",
       "transformation_type": "dbt_model",
-      "source_file": "models/orders.sql",
-      "id": "tx:models/orders.sql:1-57"
+      "source_file": "models/staging/stg_locations.sql",
+      "id": "tx:models/staging/stg_locations.sql:1-30"
+    },
+    {
+      "node_type": "dataset",
+      "storage_type": "table",
+      "is_source_of_truth": true,
+      "id": "ecom.raw_customers"
+    },
+    {
+      "node_type": "transformation",
+      "transformation_type": "dbt_model",
+      "source_file": "models/marts/orders.sql",
+      "id": "tx:models/marts/orders.sql:1-78"
+    },
+    {
+      "node_type": "transformation",
+      "transformation_type": "dbt_model",
+      "source_file": "models/marts/products.sql",
+      "id": "tx:models/marts/products.sql:1-10"
+    },
+    {
+      "node_type": "transformation",
+      "transformation_type": "dbt_model",
+      "source_file": "models/marts/customers.sql",
+      "id": "tx:models/marts/customers.sql:1-59"
+    },
+    {
+      "node_type": "dataset",
+      "id": "supplies"
+    },
+    {
+      "node_type": "dataset",
+      "storage_type": "table",
+      "is_source_of_truth": false,
+      "id": "stg_products"
+    },
+    {
+      "node_type": "dataset",
+      "storage_type": "table",
+      "is_source_of_truth": false,
+      "id": "customers"
+    },
+    {
+      "node_type": "dataset",
+      "storage_type": "table",
+      "is_source_of_truth": true,
+      "id": "ecom.raw_supplies"
+    },
+    {
+      "node_type": "dataset",
+      "storage_type": "table",
+      "is_source_of_truth": false,
+      "id": "order_items"
+    },
+    {
+      "node_type": "dataset",
+      "id": "locations"
+    },
+    {
+      "node_type": "transformation",
+      "transformation_type": "dbt_model",
+      "source_file": "models/marts/order_items.sql",
+      "id": "tx:models/marts/order_items.sql:1-67"
+    },
+    {
+      "node_type": "transformation",
+      "transformation_type": "dbt_model",
+      "source_file": "models/marts/metricflow_time_spine.sql",
+      "id": "tx:models/marts/metricflow_time_spine.sql:1-20"
     },
     {
       "node_type": "transformation",
       "transformation_type": "dbt_model",
       "source_file": "models/staging/stg_customers.sql",
-      "id": "tx:models/staging/stg_customers.sql:1-23"
-    },
-    {
-      "node_type": "dataset",
-      "id": "raw_customers"
-    },
-    {
-      "node_type": "transformation",
-      "transformation_type": "dbt_model",
-      "source_file": "models/staging/stg_orders.sql",
-      "id": "tx:models/staging/stg_orders.sql:1-24"
-    },
-    {
-      "node_type": "dataset",
-      "id": "raw_orders"
-    },
-    {
-      "node_type": "transformation",
-      "transformation_type": "dbt_model",
-      "source_file": "models/staging/stg_payments.sql",
-      "id": "tx:models/staging/stg_payments.sql:1-26"
-    },
-    {
-      "node_type": "dataset",
-      "id": "raw_payments"
+      "id": "tx:models/staging/stg_customers.sql:1-24"
     }
   ],
   "edges": [
     {
       "edge_type": "CONSUMES",
+      "source": "stg_order_items",
+      "target": "tx:models/marts/order_items.sql:1-67"
+    },
+    {
+      "edge_type": "CONSUMES",
+      "source": "ecom.raw_stores",
+      "target": "tx:models/staging/stg_locations.sql:1-30"
+    },
+    {
+      "edge_type": "PRODUCES",
+      "source": "tx:models/staging/stg_order_items.sql:1-23",
+      "target": "stg_order_items"
+    },
+    {
+      "edge_type": "PRODUCES",
+      "source": "tx:models/staging/stg_orders.sql:1-34",
+      "target": "stg_orders"
+    },
+    {
+      "edge_type": "PRODUCES",
+      "source": "tx:models/staging/stg_supplies.sql:1-32",
+      "target": "stg_supplies"
+    },
+    {
+      "edge_type": "CONSUMES",
+      "source": "ecom.raw_products",
+      "target": "tx:models/staging/stg_products.sql:1-35"
+    },
+    {
+      "edge_type": "PRODUCES",
+      "source": "tx:models/staging/stg_products.sql:1-35",
+      "target": "stg_products"
+    },
+    {
+      "edge_type": "PRODUCES",
+      "source": "tx:models/marts/supplies.sql:1-10",
+      "target": "supplies"
+    },
+    {
+      "edge_type": "CONSUMES",
+      "source": "ecom.raw_items",
+      "target": "tx:models/staging/stg_order_items.sql:1-23"
+    },
+    {
+      "edge_type": "CONSUMES",
       "source": "stg_customers",
-      "target": "tx:models/customers.sql:1-70"
+      "target": "tx:models/marts/customers.sql:1-59"
+    },
+    {
+      "edge_type": "CONSUMES",
+      "source": "stg_locations",
+      "target": "tx:models/marts/locations.sql:1-10"
+    },
+    {
+      "edge_type": "CONSUMES",
+      "source": "ecom.raw_orders",
+      "target": "tx:models/staging/stg_orders.sql:1-34"
     },
     {
       "edge_type": "CONSUMES",
       "source": "stg_orders",
-      "target": "tx:models/customers.sql:1-70"
+      "target": "tx:models/marts/orders.sql:1-78"
     },
     {
       "edge_type": "CONSUMES",
       "source": "stg_orders",
-      "target": "tx:models/orders.sql:1-57"
+      "target": "tx:models/marts/order_items.sql:1-67"
     },
     {
       "edge_type": "CONSUMES",
-      "source": "stg_payments",
-      "target": "tx:models/customers.sql:1-70"
+      "source": "orders",
+      "target": "tx:models/marts/customers.sql:1-59"
     },
     {
       "edge_type": "CONSUMES",
-      "source": "stg_payments",
-      "target": "tx:models/orders.sql:1-57"
+      "source": "stg_supplies",
+      "target": "tx:models/marts/order_items.sql:1-67"
+    },
+    {
+      "edge_type": "CONSUMES",
+      "source": "stg_supplies",
+      "target": "tx:models/marts/supplies.sql:1-10"
     },
     {
       "edge_type": "PRODUCES",
-      "source": "tx:models/customers.sql:1-70",
-      "target": "customers"
+      "source": "tx:models/marts/locations.sql:1-10",
+      "target": "locations"
     },
     {
       "edge_type": "PRODUCES",
-      "source": "tx:models/orders.sql:1-57",
+      "source": "tx:models/staging/stg_locations.sql:1-30",
+      "target": "stg_locations"
+    },
+    {
+      "edge_type": "CONSUMES",
+      "source": "ecom.raw_customers",
+      "target": "tx:models/staging/stg_customers.sql:1-24"
+    },
+    {
+      "edge_type": "PRODUCES",
+      "source": "tx:models/marts/orders.sql:1-78",
       "target": "orders"
     },
     {
       "edge_type": "PRODUCES",
-      "source": "tx:models/staging/stg_customers.sql:1-23",
+      "source": "tx:models/marts/products.sql:1-10",
+      "target": "products"
+    },
+    {
+      "edge_type": "PRODUCES",
+      "source": "tx:models/marts/customers.sql:1-59",
+      "target": "customers"
+    },
+    {
+      "edge_type": "CONSUMES",
+      "source": "stg_products",
+      "target": "tx:models/marts/order_items.sql:1-67"
+    },
+    {
+      "edge_type": "CONSUMES",
+      "source": "stg_products",
+      "target": "tx:models/marts/products.sql:1-10"
+    },
+    {
+      "edge_type": "CONSUMES",
+      "source": "ecom.raw_supplies",
+      "target": "tx:models/staging/stg_supplies.sql:1-32"
+    },
+    {
+      "edge_type": "CONSUMES",
+      "source": "order_items",
+      "target": "tx:models/marts/orders.sql:1-78"
+    },
+    {
+      "edge_type": "PRODUCES",
+      "source": "tx:models/marts/order_items.sql:1-67",
+      "target": "order_items"
+    },
+    {
+      "edge_type": "PRODUCES",
+      "source": "tx:models/marts/metricflow_time_spine.sql:1-20",
+      "target": "metricflow_time_spine"
+    },
+    {
+      "edge_type": "PRODUCES",
+      "source": "tx:models/staging/stg_customers.sql:1-24",
       "target": "stg_customers"
-    },
-    {
-      "edge_type": "CONSUMES",
-      "source": "raw_customers",
-      "target": "tx:models/staging/stg_customers.sql:1-23"
-    },
-    {
-      "edge_type": "PRODUCES",
-      "source": "tx:models/staging/stg_orders.sql:1-24",
-      "target": "stg_orders"
-    },
-    {
-      "edge_type": "CONSUMES",
-      "source": "raw_orders",
-      "target": "tx:models/staging/stg_orders.sql:1-24"
-    },
-    {
-      "edge_type": "PRODUCES",
-      "source": "tx:models/staging/stg_payments.sql:1-26",
-      "target": "stg_payments"
-    },
-    {
-      "edge_type": "CONSUMES",
-      "source": "raw_payments",
-      "target": "tx:models/staging/stg_payments.sql:1-26"
     }
   ]
 }
