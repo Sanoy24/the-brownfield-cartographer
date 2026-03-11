@@ -1,0 +1,60 @@
+{
+  "surveyor": {
+    "total_files_scanned": 8,
+    "modules_parsed": 8,
+    "top_architectural_hubs": [
+      {
+        "path": "dbt_project.yml",
+        "pagerank": 0.125
+      },
+      {
+        "path": "models/customers.sql",
+        "pagerank": 0.125
+      },
+      {
+        "path": "models/orders.sql",
+        "pagerank": 0.125
+      },
+      {
+        "path": "models/schema.yml",
+        "pagerank": 0.125
+      },
+      {
+        "path": "models/staging/schema.yml",
+        "pagerank": 0.125
+      },
+      {
+        "path": "models/staging/stg_customers.sql",
+        "pagerank": 0.125
+      },
+      {
+        "path": "models/staging/stg_orders.sql",
+        "pagerank": 0.125
+      },
+      {
+        "path": "models/staging/stg_payments.sql",
+        "pagerank": 0.125
+      }
+    ],
+    "circular_dependencies": [],
+    "dead_code_candidates": [],
+    "high_velocity_files": []
+  },
+  "hydrologist": {
+    "total_transformations": 5,
+    "total_datasets": 5,
+    "sql_files_analyzed": 5,
+    "python_files_scanned": 0,
+    "data_sources": [
+      "raw_customers",
+      "raw_orders",
+      "raw_payments"
+    ],
+    "data_sinks": [
+      "customers",
+      "orders"
+    ],
+    "lineage_nodes": 13,
+    "lineage_edges": 13
+  }
+}

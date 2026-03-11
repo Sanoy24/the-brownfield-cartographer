@@ -1,0 +1,96 @@
+{
+  "directed": true,
+  "multigraph": false,
+  "graph": {},
+  "nodes": [
+    {
+      "node_type": "module",
+      "language": "sql",
+      "lines_of_code": 57,
+      "complexity_score": 0.0,
+      "change_velocity_30d": 0,
+      "is_dead_code_candidate": false,
+      "public_functions": [],
+      "classes": [],
+      "id": "models/orders.sql"
+    },
+    {
+      "node_type": "module",
+      "language": "yaml",
+      "lines_of_code": 83,
+      "complexity_score": 0.0,
+      "change_velocity_30d": 0,
+      "is_dead_code_candidate": false,
+      "public_functions": [],
+      "classes": [],
+      "id": "models/schema.yml"
+    },
+    {
+      "node_type": "module",
+      "language": "yaml",
+      "lines_of_code": 32,
+      "complexity_score": 0.0,
+      "change_velocity_30d": 0,
+      "is_dead_code_candidate": false,
+      "public_functions": [],
+      "classes": [],
+      "id": "models/staging/schema.yml"
+    },
+    {
+      "node_type": "module",
+      "language": "sql",
+      "lines_of_code": 23,
+      "complexity_score": 0.0,
+      "change_velocity_30d": 0,
+      "is_dead_code_candidate": false,
+      "public_functions": [],
+      "classes": [],
+      "id": "models/staging/stg_customers.sql"
+    },
+    {
+      "node_type": "module",
+      "language": "sql",
+      "lines_of_code": 70,
+      "complexity_score": 0.0,
+      "change_velocity_30d": 0,
+      "is_dead_code_candidate": false,
+      "public_functions": [],
+      "classes": [],
+      "id": "models/customers.sql"
+    },
+    {
+      "node_type": "module",
+      "language": "sql",
+      "lines_of_code": 26,
+      "complexity_score": 0.0,
+      "change_velocity_30d": 0,
+      "is_dead_code_candidate": false,
+      "public_functions": [],
+      "classes": [],
+      "id": "models/staging/stg_payments.sql"
+    },
+    {
+      "node_type": "module",
+      "language": "yaml",
+      "lines_of_code": 27,
+      "complexity_score": 0.0,
+      "change_velocity_30d": 0,
+      "is_dead_code_candidate": false,
+      "public_functions": [],
+      "classes": [],
+      "id": "dbt_project.yml"
+    },
+    {
+      "node_type": "module",
+      "language": "sql",
+      "lines_of_code": 24,
+      "complexity_score": 0.0,
+      "change_velocity_30d": 0,
+      "is_dead_code_candidate": false,
+      "public_functions": [],
+      "classes": [],
+      "id": "models/staging/stg_orders.sql"
+    }
+  ],
+  "edges": []
+}
