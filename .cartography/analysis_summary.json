@@ -1,60 +1,76 @@
 {
   "surveyor": {
-    "total_files_scanned": 8,
-    "modules_parsed": 8,
+    "total_files_scanned": 37,
+    "modules_parsed": 37,
     "top_architectural_hubs": [
       {
+        "path": ".github/workflows/cd_prod.yml",
+        "pagerank": 0.027
+      },
+      {
+        "path": ".github/workflows/cd_staging.yml",
+        "pagerank": 0.027
+      },
+      {
+        "path": ".github/workflows/ci.yml",
+        "pagerank": 0.027
+      },
+      {
+        "path": ".github/workflows/scripts/dbt_cloud_run_job.py",
+        "pagerank": 0.027
+      },
+      {
+        "path": ".pre-commit-config.yaml",
+        "pagerank": 0.027
+      },
+      {
         "path": "dbt_project.yml",
-        "pagerank": 0.125
+        "pagerank": 0.027
       },
       {
-        "path": "models/customers.sql",
-        "pagerank": 0.125
+        "path": "macros/cents_to_dollars.sql",
+        "pagerank": 0.027
       },
       {
-        "path": "models/orders.sql",
-        "pagerank": 0.125
+        "path": "macros/generate_schema_name.sql",
+        "pagerank": 0.027
       },
       {
-        "path": "models/schema.yml",
-        "pagerank": 0.125
+        "path": "models/marts/customers.sql",
+        "pagerank": 0.027
       },
       {
-        "path": "models/staging/schema.yml",
-        "pagerank": 0.125
-      },
-      {
-        "path": "models/staging/stg_customers.sql",
-        "pagerank": 0.125
-      },
-      {
-        "path": "models/staging/stg_orders.sql",
-        "pagerank": 0.125
-      },
-      {
-        "path": "models/staging/stg_payments.sql",
-        "pagerank": 0.125
+        "path": "models/marts/customers.yml",
+        "pagerank": 0.027
       }
     ],
     "circular_dependencies": [],
-    "dead_code_candidates": [],
+    "dead_code_candidates": [
+      ".github/workflows/scripts/dbt_cloud_run_job.py"
+    ],
     "high_velocity_files": []
   },
   "hydrologist": {
-    "total_transformations": 5,
-    "total_datasets": 5,
-    "sql_files_analyzed": 5,
-    "python_files_scanned": 0,
+    "total_transformations": 13,
+    "total_datasets": 15,
+    "sql_files_analyzed": 15,
+    "python_files_scanned": 1,
     "data_sources": [
-      "raw_customers",
-      "raw_orders",
-      "raw_payments"
+      "ecom.raw_customers",
+      "ecom.raw_items",
+      "ecom.raw_orders",
+      "ecom.raw_products",
+      "ecom.raw_stores",
+      "ecom.raw_supplies"
     ],
     "data_sinks": [
       "customers",
-      "orders"
+      "locations",
+      "metricflow_time_spine",
+      "products",
+      "supplies"
     ],
-    "lineage_nodes": 13,
-    "lineage_edges": 13
+    "lineage_nodes": 32,
+    "lineage_edges": 30
   }
 }
