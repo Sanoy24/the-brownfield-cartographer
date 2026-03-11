@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Optional
 
 import tree_sitter_python as tspython
-from tree_sitter import Language, Parser, Node
+from tree_sitter import Language, Parser, Node, QueryCursor
 
 from src.models.schemas import (
     FunctionNode,
@@ -64,46 +64,65 @@ def get_parser(lang: LangEnum) -> Optional[Parser]:
 
 
 # ---------------------------------------------------------------------------
-# Python AST Analysis
+# Python AST Analysis (using modern Query API)
 # ---------------------------------------------------------------------------
+
+# Optimized queries for Python structural extraction
+PYTHON_QUERIES = {
+    "imports": """
+        (import_statement (dotted_name) @name)
+        (import_from_statement module_name: (dotted_name) @module)
+    """,
+    "functions": """
+        (function_definition name: (identifier) @name)
+    """,
+    "classes": """
+        (class_definition name: (identifier) @name)
+    """,
+    "complexity": """
+        (if_statement) @branch
+        (while_statement) @branch
+        (for_statement) @branch
+        (conditional_expression) @branch
+        (boolean_operator) @branch
+        (except_clause) @branch
+        (list_comprehension) @branch
+        (set_comprehension) @branch
+        (dictionary_comprehension) @branch
+        (generator_expression) @branch
+    """,
+}
+
 
 def _extract_imports(root_node: Node, source_code: bytes) -> list[str]:
     """
-    Walk the AST to find all import statements.
+    Use Tree-sitter Query API to find all import statements.
 
-    Handles both `import X` and `from X import Y` styles.
-    Returns a list of imported module paths.
+    cursor.captures() returns {tag_name: [Node, ...]}, so we
+    iterate over the dict values to get the matched nodes.
     """
+    lang = _get_python_language()
+    query = lang.query(PYTHON_QUERIES["imports"])
+    cursor = QueryCursor(query)
+
     imports: list[str] = []
+    # captures is a dict: {"name": [Node, ...], "module": [Node, ...]}
+    captures: dict = cursor.captures(root_node)
+    for nodes in captures.values():
+        for node in nodes:
+            imports.append(node.text.decode("utf-8"))
 
-    for child in root_node.children:
-        if child.type == "import_statement":
-            # import foo, bar, baz
-            for name_node in child.children:
-                if name_node.type == "dotted_name":
-                    imports.append(name_node.text.decode("utf-8"))
-                elif name_node.type == "aliased_import":
-                    dotted = name_node.child_by_field_name("name")
-                    if dotted:
-                        imports.append(dotted.text.decode("utf-8"))
-
-        elif child.type == "import_from_statement":
-            # from foo.bar import baz
-            module_node = child.child_by_field_name("module_name")
-            if module_node:
-                imports.append(module_node.text.decode("utf-8"))
-
-    return imports
+    return list(set(imports))  # Deduplicate
 
 
 def _extract_functions(
     root_node: Node, source_code: bytes, module_path: str
 ) -> list[FunctionNode]:
     """
-    Extract all top-level and class-level function definitions.
-
-    Returns FunctionNode instances with signature, line range,
-    and public/private classification.
+    Use Tree-sitter Query API to extract function definitions.
+    
+    Note: Still uses a recursive walk for class-level functions to 
+    maintain qualified naming (Class.method) correctly.
     """
     functions: list[FunctionNode] = []
 
@@ -115,6 +134,7 @@ def _extract_functions(
                     continue
                 name = name_node.text.decode("utf-8")
                 qualified = f"{class_prefix}{name}" if class_prefix else name
+                
                 # Extract the signature line
                 first_line = source_code[
                     child.start_byte : child.end_byte
@@ -146,14 +166,53 @@ def _extract_functions(
 
 
 def _extract_classes(root_node: Node, source_code: bytes) -> list[str]:
-    """Extract names of all top-level class definitions."""
+    """
+    Use Tree-sitter Query API to extract top-level class names.
+
+    Only captures class names whose parent class_definition is a
+    direct child of the module root node (i.e. top-level classes).
+    """
+    lang = _get_python_language()
+    query = lang.query(PYTHON_QUERIES["classes"])
+    cursor = QueryCursor(query)
+
     classes: list[str] = []
-    for child in root_node.children:
-        if child.type == "class_definition":
-            name_node = child.child_by_field_name("name")
-            if name_node:
-                classes.append(name_node.text.decode("utf-8"))
+    captures: dict = cursor.captures(root_node)
+    for nodes in captures.values():
+        for node in nodes:
+            # node is the identifier; its parent is class_definition
+            cls_def = node.parent
+            if cls_def and cls_def.parent == root_node:
+                classes.append(node.text.decode("utf-8"))
+
     return classes
+
+
+def _compute_complexity(root_node: Node, lines_of_code: int) -> float:
+    """
+    Estimate cyclomatic complexity by counting decision points and
+    normalizing by file size.
+
+    Raw complexity is approximated as the number of branching
+    constructs (if, for, while, boolean operators, comprehensions,
+    except clauses). This value is then scaled to a
+    "complexity per 100 LOC" score so that large files are
+    comparable to small ones.
+    """
+    lang = _get_python_language()
+    query = lang.query(PYTHON_QUERIES["complexity"])
+    cursor = QueryCursor(query)
+    captures: dict = cursor.captures(root_node)
+
+    # Sum total matched nodes across all capture tags
+    total = sum(len(nodes) for nodes in captures.values())
+    logger.debug("Complexity captures: %d", total)
+
+    loc = max(lines_of_code, 1)
+    raw = 1 + total  # cyclomatic-style base of 1
+    # Normalize to "complexity per 100 LOC" for comparability
+    normalized = (raw / loc) * 100.0
+    return round(normalized, 2)
 
 
 def _compute_comment_ratio(source_code: str) -> float:
@@ -217,6 +276,7 @@ def analyze_module(file_path: Path, repo_root: Path) -> Optional[ModuleNode]:
                 for fn in _extract_functions(root, source_bytes, relative_path)
                 if fn.is_public_api
             ]
+            module.complexity_score = _compute_complexity(root, lines_of_code)
 
     return module
 
