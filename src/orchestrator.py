@@ -47,15 +47,21 @@ def _clone_repo(url: str, target_dir: Path) -> Path:
         Path to the cloned repository root.
 
     Raises:
-        RuntimeError: If git clone fails.
+        RuntimeError: If git clone fails or times out.
     """
     console.print(f"  Cloning [bold cyan]{url}[/bold cyan] …")
-    result = subprocess.run(
-        ["git", "clone", "--depth", "1", url, str(target_dir)],
-        capture_output=True,
-        text=True,
-        timeout=120,
-    )
+    try:
+        result = subprocess.run(
+            ["git", "clone", "--depth", "1", url, str(target_dir)],
+            capture_output=True,
+            text=True,
+            timeout=600,
+        )
+    except subprocess.TimeoutExpired:
+        raise RuntimeError(
+            f"git clone timed out after 600s. Check your network connection "
+            f"or clone the repo manually and pass a local path instead."
+        )
     if result.returncode != 0:
         raise RuntimeError(f"git clone failed: {result.stderr.strip()}")
     console.print(f"  ✓ Cloned to {target_dir}")
