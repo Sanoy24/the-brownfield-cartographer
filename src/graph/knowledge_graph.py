@@ -223,6 +223,103 @@ class KnowledgeGraph:
             output_path,
         )
 
+    # ------------------------------------------------------------------
+    # Deserialization
+    # ------------------------------------------------------------------
+
+    def load_module_graph(self, input_path: Path) -> None:
+        """
+        Load a previously serialized module graph from JSON.
+
+        Merges loaded nodes and edges into the current graph instance,
+        restoring node attributes from the node-link JSON format.
+        """
+        raw = json.loads(input_path.read_text(encoding="utf-8"))
+        loaded = json_graph.node_link_graph(raw)
+        self.graph.update(loaded)
+
+        # Rebuild internal module node index from loaded attributes
+        for node_id, attrs in loaded.nodes(data=True):
+            if attrs.get("node_type") == "module":
+                self._module_nodes[node_id] = ModuleNode(
+                    path=node_id,
+                    language=attrs.get("language", "unknown"),
+                    lines_of_code=attrs.get("lines_of_code", 0),
+                    complexity_score=attrs.get("complexity_score", 0.0),
+                    change_velocity_30d=attrs.get("change_velocity_30d", 0),
+                    is_dead_code_candidate=attrs.get("is_dead_code_candidate", False),
+                    public_functions=attrs.get("public_functions", []),
+                    classes=attrs.get("classes", []),
+                )
+
+        logger.info(
+            "Module graph loaded: %d nodes, %d edges ← %s",
+            loaded.number_of_nodes(),
+            loaded.number_of_edges(),
+            input_path,
+        )
+
+    def load_lineage_graph(self, input_path: Path) -> None:
+        """
+        Load a previously serialized lineage graph from JSON.
+
+        Merges dataset and transformation nodes plus CONSUMES/PRODUCES
+        edges into the current graph instance.
+        """
+        raw = json.loads(input_path.read_text(encoding="utf-8"))
+        loaded = json_graph.node_link_graph(raw)
+        self.graph.update(loaded)
+
+        # Rebuild internal dataset index from loaded attributes
+        for node_id, attrs in loaded.nodes(data=True):
+            if attrs.get("node_type") == "dataset":
+                self._dataset_nodes[node_id] = DatasetNode(
+                    name=node_id,
+                    storage_type=attrs.get("storage_type", "table"),
+                    is_source_of_truth=attrs.get("is_source_of_truth", False),
+                )
+
+        logger.info(
+            "Lineage graph loaded: %d nodes, %d edges ← %s",
+            loaded.number_of_nodes(),
+            loaded.number_of_edges(),
+            input_path,
+        )
+
+    @classmethod
+    def from_artifacts(cls, cartography_dir: Path) -> "KnowledgeGraph":
+        """
+        Reconstruct a KnowledgeGraph from serialized .cartography/ artifacts.
+
+        Args:
+            cartography_dir: Path to the .cartography/ directory containing
+                             module_graph.json and lineage_graph.json.
+
+        Returns:
+            A KnowledgeGraph instance populated with the saved data.
+        """
+        kg = cls()
+
+        module_path = cartography_dir / "module_graph.json"
+        if module_path.exists():
+            kg.load_module_graph(module_path)
+
+        lineage_path = cartography_dir / "lineage_graph.json"
+        if lineage_path.exists():
+            kg.load_lineage_graph(lineage_path)
+
+        logger.info(
+            "KnowledgeGraph restored from %s — %d nodes, %d edges",
+            cartography_dir,
+            kg.graph.number_of_nodes(),
+            kg.graph.number_of_edges(),
+        )
+        return kg
+
+    # ------------------------------------------------------------------
+    # Summary
+    # ------------------------------------------------------------------
+
     def summary(self) -> dict[str, Any]:
         """Return a quick summary of graph contents."""
         return {
