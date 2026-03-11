@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Brownfield Cartographer | Graph Explorer</title>
+        <script src="https://unpkg.com/force-graph"></script>
+        <style>
+            body {
+                margin: 0;
+                background: #0f172a;
+                color: #f8fafc;
+                font-family:
+                    "Inter",
+                    -apple-system,
+                    system-ui,
+                    sans-serif;
+                overflow: hidden;
+            }
+            #controls {
+                position: absolute;
+                top: 20px;
+                left: 20px;
+                z-index: 10;
+                background: rgba(30, 41, 59, 0.8);
+                backdrop-filter: blur(8px);
+                padding: 20px;
+                border-radius: 12px;
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.4);
+                width: 280px;
+            }
+            h1 {
+                font-size: 1.2rem;
+                margin: 0 0 15px 0;
+                background: linear-gradient(90deg, #38bdf8, #818cf8);
+                -webkit-background-clip: text;
+                -webkit-text-fill-color: transparent;
+            }
+            .btn-group {
+                display: flex;
+                gap: 8px;
+                margin-bottom: 20px;
+            }
+            .btn {
+                background: #334155;
+                border: none;
+                color: white;
+                padding: 8px 12px;
+                border-radius: 6px;
+                cursor: pointer;
+                font-size: 0.85rem;
+                transition: all 0.2s;
+                flex: 1;
+            }
+            .btn:hover {
+                background: #475569;
+            }
+            .btn.active {
+                background: #6366f1;
+                box-shadow: 0 0 10px rgba(99, 102, 241, 0.5);
+            }
+            #info {
+                font-size: 0.85rem;
+                line-height: 1.5;
+                color: #94a3b8;
+            }
+            .node-label {
+                position: absolute;
+                pointer-events: none;
+                background: rgba(15, 23, 42, 0.9);
+                padding: 4px 8px;
+                border-radius: 4px;
+                font-size: 12px;
+                border: 1px solid #334155;
+            }
+            #graph {
+                width: 100vw;
+                height: 100vh;
+            }
+        </style>
+    </head>
+    <body>
+        <div id="controls">
+            <h1>Cartographer Graph</h1>
+            <div class="btn-group">
+                <button
+                <button class="btn active" onclick="loadGraph('module_graph.json', event)">Module Graph</button>
+                <button class="btn" onclick="loadGraph('lineage_graph.json', event)">Lineage Graph</button>
+            </div>
+
+            <div style="margin-bottom: 20px;">
+                <label for="file-upload" class="btn" style="display: block; text-align: center; background: #1e293b; border: 1px dashed #475569;">
+                    📂 Upload Local JSON
+                </label>
+                <input type="file" id="file-upload" style="display: none;" onchange="handleFileUpload(event)">
+                <div style="font-size: 10px; color: #64748b; margin-top: 4px; text-align: center;">Use if loading fails (bypasses CORS)</div>
+            </div>
+
+            <div id="info">
+                <p><strong>Instructions:</strong></p>
+                <ul style="padding-left: 20px;">
+                    <li>Scroll to zoom</li>
+                    <li>Drag to rotate/pan</li>
+                    <li>Hover to see details</li>
+                </ul>
+                <hr style="border: 0; border-top: 1px solid #334155; margin: 15px 0;">
+                <div id="node-details">Select a node to see details.</div>
+            </div>
+        </div>
+        <div id="graph"></div>
+
+        <script>
+            const graphEl = document.getElementById('graph');
+            const Graph = ForceGraph()(graphEl);
+
+            function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            const detailsEl = document.getElementById('node-details');
+            detailsEl.innerHTML = `<span style="color: #6366f1;">Parsing ${file.name}...</span>`;
+            
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const data = JSON.parse(e.target.result);
+                    renderData(data);
+                    detailsEl.innerHTML = `<span style="color: #10b981;">✅ Successfully loaded ${file.name}</span>`;
+                } catch (err) {
+                    console.error(err);
+                    detailsEl.innerHTML = `
+                        <div style="color: #ef4444; border: 1px solid #ef4444; padding: 10px; border-radius: 6px; margin-top: 10px;">
+                            <strong>Failed to parse file:</strong><br>
+                            ${err.message}
+                        </div>
+                    `;
+                }
+            };
+            reader.onerror = () => {
+                detailsEl.innerText = "Error reading file.";
+            };
+            reader.readAsText(file);
+        }
+
+        function renderData(data) {
+            if (!data || !data.nodes || !Array.isArray(data.nodes)) {
+                throw new Error("Invalid graph format: 'nodes' array missing.");
+            }
+
+            const nodes = data.nodes.map(n => ({
+                id: n.id || n.name || "unknown",
+                name: (n.id || n.name || "").split('/').pop(),
+                fullPath: n.id || n.name,
+                type: n.node_type || n.type || 'unknown',
+                ...n
+            }));
+
+            // Handle both 'links' (standard) and 'edges' (alternative)
+            const edgeList = data.links || data.edges || [];
+            const links = edgeList.map(l => ({
+                source: typeof l.source === 'object' ? l.source.id : l.source,
+                target: typeof l.target === 'object' ? l.target.id : l.target,
+                type: l.edge_type || l.type || 'rel'
+            }));
+
+            Graph.graphData({ nodes, links })
+                    .nodeAutoColorBy('type')
+                    .nodeLabel(node => `
+                        <div style="background: #1e293b; padding: 10px; border-radius: 8px; border: 1px solid #334155; color: white; min-width: 150px;">
+                            <div style="color: #38bdf8; font-weight: bold; margin-bottom: 4px; border-bottom: 1px solid #334155; padding-bottom: 4px;">${node.id}</div>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px; font-size: 11px;">
+                                <span style="color: #94a3b8;">Type:</span><span>${node.type}</span>
+                                ${node.language ? `<span style="color: #94a3b8;">Lang:</span><span>${node.language}</span>` : ''}
+                                ${node.lines_of_code ? `<span style="color: #94a3b8;">LOC:</span><span>${node.lines_of_code}</span>` : ''}
+                                ${node.complexity_score ? `<span style="color: #94a3b8;">Complexity:</span><span>${node.complexity_score}</span>` : ''}
+                            </div>
+                        </div>
+                    `)
+                    .onNodeClick(node => {
+                        document.getElementById('node-details').innerHTML = `
+                            <div style="color: #38bdf8; font-weight: bold; margin-bottom: 8px; font-size: 1rem;">${node.name}</div>
+                            <div style="background: #1e293b; padding: 12px; border-radius: 8px; border: 1px solid #334155;">
+                                <table style="width: 100%; font-size: 12px; border-collapse: collapse;">
+                                    <tr style="border-bottom: 1px solid #334155;"><td style="color: #64748b; padding: 4px 0;">Type</td><td style="text-align: right;">${node.type}</td></tr>
+                                    ${node.language ? `<tr style="border-bottom: 1px solid #334155;"><td style="color: #64748b; padding: 4px 0;">Language</td><td style="text-align: right;">${node.language}</td></tr>` : ''}
+                                    ${node.lines_of_code ? `<tr style="border-bottom: 1px solid #334155;"><td style="color: #64748b; padding: 4px 0;">LOC</td><td style="text-align: right;">${node.lines_of_code}</td></tr>` : ''}
+                                    ${node.complexity_score ? `<tr style="border-bottom: 1px solid #334155;"><td style="color: #64748b; padding: 4px 0;">Complexity</td><td style="text-align: right;">${node.complexity_score}</td></tr>` : ''}
+                                    ${node.purpose_statement ? `<tr><td colspan="2" style="color: #94a3b8; padding-top: 8px; font-style: italic;">${node.purpose_statement}</td></tr>` : ''}
+                                </table>
+                            </div>
+                        `;
+                        Graph.centerAt(node.x, node.y, 1000);
+                        Graph.zoom(3, 1000);
+                    })
+                    .linkDirectionalArrowLength(6)
+                    .linkDirectionalArrowRelPos(1);
+
+                Graph.nodeCanvasObject((node, ctx, globalScale) => {
+                    const label = node.name;
+                    const fontSize = 12/globalScale;
+                    ctx.font = `${fontSize}px Inter, Sans-Serif`;
+
+                    ctx.fillStyle = node.color || '#6366f1';
+                    ctx.beginPath();
+                    ctx.arc(node.x, node.y, 4.5, 0, 2 * Math.PI, false);
+                    ctx.fill();
+
+                    if (globalScale > 1.5) {
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'middle';
+                        ctx.fillStyle = '#cbd5e1';
+                        ctx.fillText(label, node.x, node.y + 10);
+                    }
+                });
+            }
+
+            function loadGraph(type, event) {
+                if (event) {
+                    document.querySelectorAll('.btn').forEach(b => b.classList.remove('active'));
+                    event.target.classList.add('active');
+                }
+
+                const detailsEl = document.getElementById('node-details');
+                detailsEl.innerHTML = `<span style="color: #6366f1;">Loading ${type}...</span>`;
+
+                fetch(`.cartography/${type}`)
+                    .then(res => {
+                        if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+                        return res.json();
+                    })
+                    .then(data => {
+                        detailsEl.innerText = "Select a node to see details.";
+                        renderData(data);
+                    })
+                    .catch(err => {
+                        console.error(err);
+                        detailsEl.innerHTML = `
+                            <div style="color: #ef4444; border: 1px solid #ef4444; padding: 10px; border-radius: 6px; margin-top: 10px;">
+                                <strong>Connection Refused</strong><br>
+                                <small>${err.message}</small><br><br>
+                                <div style="font-size: 11px; color: #94a3b8;">
+                                    1. Open terminal<br>
+                                    2. Run: <code>python -m http.server</code><br>
+                                    3. Visit: <code>localhost:8000/visualize.html</code>
+                                </div>
+                                <div style="margin-top: 10px; font-weight: bold; color: white;">OR click "Upload Local JSON" above.</div>
+                            </div>
+                        `;
+                    });
+            }
+
+            window.onload = () => loadGraph('module_graph.json');
+        </script>
+    </body>
+</html>
