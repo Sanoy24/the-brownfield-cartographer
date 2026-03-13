@@ -34,6 +34,7 @@ console = Console()
 # Tool Implementations (framework-independent logic)
 # ---------------------------------------------------------------------------
 
+
 def tool_find_implementation(
     knowledge_graph: KnowledgeGraph,
     concept: str,
@@ -86,14 +87,25 @@ def tool_find_implementation(
             match_reasons.append("file_path")
 
         if score > 0:
-            results.append({
-                "path": node_id,
-                "score": round(score, 2),
-                "match_reasons": match_reasons,
-                "language": attrs.get("language", "unknown"),
-                "purpose": purpose or "N/A",
-                "lines_of_code": attrs.get("lines_of_code", 0),
-            })
+            loc = attrs.get("lines_of_code", 0) or 0
+            analysis_method = "static"
+            if purpose:
+                analysis_method = "llm+static"
+            results.append(
+                {
+                    "path": node_id,
+                    "score": round(score, 2),
+                    "match_reasons": match_reasons,
+                    "language": attrs.get("language", "unknown"),
+                    "purpose": purpose or "N/A",
+                    "lines_of_code": loc,
+                    "evidence": {
+                        "source_file": node_id,
+                        "line_range": [1, loc] if loc else None,
+                        "analysis_method": analysis_method,
+                    },
+                }
+            )
 
     results.sort(key=lambda x: x["score"], reverse=True)
     return results[:20]
@@ -134,13 +146,38 @@ def tool_trace_lineage(
         visited.add(current)
 
         node_attrs = dict(graph.nodes.get(current, {}))
-        lineage.append({
-            "node": current,
-            "node_type": node_attrs.get("node_type", "unknown"),
-            "depth": depth,
-            "transformation_type": node_attrs.get("transformation_type"),
-            "source_file": node_attrs.get("source_file"),
-        })
+        # Derive line range for evidence
+        line_start = node_attrs.get("line_start")
+        line_end = node_attrs.get("line_end")
+        if line_start is None or line_end is None:
+            # For module nodes, approximate as full file span when LOC is known
+            if node_attrs.get("node_type") == "module":
+                loc = node_attrs.get("lines_of_code", 0) or 0
+                if loc:
+                    line_start, line_end = 1, loc
+        analysis_method = "static"
+        if node_attrs.get("node_type") == "module" and node_attrs.get(
+            "purpose_statement"
+        ):
+            analysis_method = "llm+static"
+        lineage.append(
+            {
+                "node": current,
+                "node_type": node_attrs.get("node_type", "unknown"),
+                "depth": depth,
+                "transformation_type": node_attrs.get("transformation_type"),
+                "source_file": node_attrs.get("source_file"),
+                "evidence": {
+                    "source_file": node_attrs.get("source_file") or current,
+                    "line_range": (
+                        [line_start, line_end]
+                        if line_start is not None and line_end is not None
+                        else None
+                    ),
+                    "analysis_method": analysis_method,
+                },
+            }
+        )
 
         # Traverse in the requested direction
         if direction == "upstream":
@@ -184,13 +221,39 @@ def tool_blast_radius(
             if successor not in visited:
                 visited.add(successor)
                 edge_data = graph.edges.get((current, successor), {})
-                affected.append({
-                    "node": successor,
-                    "node_type": graph.nodes[successor].get("node_type", "unknown"),
-                    "distance": depth + 1,
-                    "edge_type": edge_data.get("edge_type", "unknown"),
-                    "via": current,
-                })
+                succ_attrs = graph.nodes[successor]
+
+                # Derive line range for evidence
+                line_start = succ_attrs.get("line_start")
+                line_end = succ_attrs.get("line_end")
+                if line_start is None or line_end is None:
+                    if succ_attrs.get("node_type") == "module":
+                        loc = succ_attrs.get("lines_of_code", 0) or 0
+                        if loc:
+                            line_start, line_end = 1, loc
+                analysis_method = "static"
+                if succ_attrs.get("node_type") == "module" and succ_attrs.get(
+                    "purpose_statement"
+                ):
+                    analysis_method = "llm+static"
+                affected.append(
+                    {
+                        "node": successor,
+                        "node_type": succ_attrs.get("node_type", "unknown"),
+                        "distance": depth + 1,
+                        "edge_type": edge_data.get("edge_type", "unknown"),
+                        "via": current,
+                        "evidence": {
+                            "source_file": succ_attrs.get("source_file") or successor,
+                            "line_range": (
+                                [line_start, line_end]
+                                if line_start is not None and line_end is not None
+                                else None
+                            ),
+                            "analysis_method": analysis_method,
+                        },
+                    }
+                )
                 queue.append((successor, depth + 1))
 
     affected.sort(key=lambda x: x["distance"])
@@ -213,6 +276,15 @@ def tool_explain_module(
 
     attrs = dict(knowledge_graph.graph.nodes.get(target_node, {}))
 
+    # Appropriate line range as entire file when LOC is known
+    loc = attrs.get("lines_of_code", 0) or 0
+    line_start = 1 if loc else None
+    line_end = loc if loc else None
+
+    analysis_method = "static"
+    if attrs.get("purpose_statement"):
+        analysis_method = "llm+static"
+
     # Get import relationships
     imports_from: list[str] = []
     imported_by: list[str] = []
@@ -228,7 +300,9 @@ def tool_explain_module(
     return {
         "path": target_node,
         "language": attrs.get("language", "unknown"),
-        "purpose_statement": attrs.get("purpose_statement", "Not generated — run with LLM configured"),
+        "purpose_statement": attrs.get(
+            "purpose_statement", "Not generated — run with LLM configured"
+        ),
         "domain_cluster": attrs.get("domain_cluster", "unclassified"),
         "complexity_score": attrs.get("complexity_score", 0.0),
         "lines_of_code": attrs.get("lines_of_code", 0),
@@ -238,6 +312,15 @@ def tool_explain_module(
         "imports_from": imports_from,
         "imported_by": imported_by,
         "change_velocity_30d": attrs.get("change_velocity_30d", 0),
+        "evidence": {
+            "source_file": target_node,
+            "line_range": (
+                [line_start, line_end]
+                if line_start is not None and line_end is not None
+                else None
+            ),
+            "analysis_method": analysis_method,
+        },
     }
 
 
@@ -278,6 +361,7 @@ def _fuzzy_find_node(
 # ---------------------------------------------------------------------------
 # LangGraph Agent
 # ---------------------------------------------------------------------------
+
 
 def build_navigator_agent(knowledge_graph: KnowledgeGraph) -> Any:
     """
@@ -334,13 +418,16 @@ def build_navigator_agent(knowledge_graph: KnowledgeGraph) -> Any:
         return agent
 
     except ImportError as exc:
-        logger.warning("LangGraph not available: %s — falling back to direct dispatch", exc)
+        logger.warning(
+            "LangGraph not available: %s — falling back to direct dispatch", exc
+        )
         return None
 
 
 # ---------------------------------------------------------------------------
 # Interactive REPL
 # ---------------------------------------------------------------------------
+
 
 def run_interactive(knowledge_graph: KnowledgeGraph) -> None:
     """
@@ -351,21 +438,23 @@ def run_interactive(knowledge_graph: KnowledgeGraph) -> None:
     """
     agent = build_navigator_agent(knowledge_graph)
 
-    console.print(Panel(
-        "[bold]🧭 Brownfield Cartographer — Navigator[/bold]\n\n"
-        "Query the codebase knowledge graph interactively.\n\n"
-        "[dim]Commands:[/dim]\n"
-        "  [cyan]find[/cyan] <concept>        — Search for implementations\n"
-        "  [cyan]lineage[/cyan] <dataset>      — Trace data lineage (upstream)\n"
-        "  [cyan]lineage-down[/cyan] <dataset> — Trace data lineage (downstream)\n"
-        "  [cyan]blast[/cyan] <module>         — Show blast radius\n"
-        "  [cyan]explain[/cyan] <path>         — Explain a module\n"
-        "  [cyan]summary[/cyan]               — Show graph summary\n"
-        "  [cyan]quit[/cyan]                  — Exit\n\n"
-        "[dim]Or type any natural language question (requires LLM).[/dim]",
-        title="Navigator",
-        border_style="cyan",
-    ))
+    console.print(
+        Panel(
+            "[bold]🧭 Brownfield Cartographer — Navigator[/bold]\n\n"
+            "Query the codebase knowledge graph interactively.\n\n"
+            "[dim]Commands:[/dim]\n"
+            "  [cyan]find[/cyan] <concept>        — Search for implementations\n"
+            "  [cyan]lineage[/cyan] <dataset>      — Trace data lineage (upstream)\n"
+            "  [cyan]lineage-down[/cyan] <dataset> — Trace data lineage (downstream)\n"
+            "  [cyan]blast[/cyan] <module>         — Show blast radius\n"
+            "  [cyan]explain[/cyan] <path>         — Explain a module\n"
+            "  [cyan]summary[/cyan]               — Show graph summary\n"
+            "  [cyan]quit[/cyan]                  — Exit\n\n"
+            "[dim]Or type any natural language question (requires LLM).[/dim]",
+            title="Navigator",
+            border_style="cyan",
+        )
+    )
 
     while True:
         try:
@@ -426,17 +515,25 @@ def run_interactive(knowledge_graph: KnowledgeGraph) -> None:
                 messages = response.get("messages", [])
                 if messages:
                     last_msg = messages[-1]
-                    content = last_msg.content if hasattr(last_msg, "content") else str(last_msg)
-                    console.print(Panel(
-                        Markdown(content),
-                        title="Navigator Response",
-                        border_style="green",
-                    ))
+                    content = (
+                        last_msg.content
+                        if hasattr(last_msg, "content")
+                        else str(last_msg)
+                    )
+                    console.print(
+                        Panel(
+                            Markdown(content),
+                            title="Navigator Response",
+                            border_style="green",
+                        )
+                    )
                 else:
                     console.print("[yellow]No response generated.[/yellow]")
             except Exception as exc:
                 console.print(f"[red]Agent error:[/red] {exc}")
-                console.print("[dim]Try using direct commands (find, lineage, blast, explain).[/dim]")
+                console.print(
+                    "[dim]Try using direct commands (find, lineage, blast, explain).[/dim]"
+                )
         else:
             console.print(
                 "[yellow]No LLM configured for natural language queries.[/yellow]\n"
@@ -454,8 +551,10 @@ def _display_results(title: str, results: list[dict[str, Any]]) -> None:
         console.print(f"[red]{results[0]['error']}[/red]")
         return
 
-    console.print(Panel(
-        json.dumps(results, indent=2),
-        title=f"📊 {title} ({len(results)} results)",
-        border_style="blue",
-    ))
+    console.print(
+        Panel(
+            json.dumps(results, indent=2),
+            title=f"📊 {title} ({len(results)} results)",
+            border_style="blue",
+        )
+    )
