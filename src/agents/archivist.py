@@ -280,7 +280,12 @@ def generate_codebase_md(
         sections.append("_Modules where docstring contradicts actual implementation:_")
         for path, drifts in list(doc_drift.items())[:15]:
             for drift in drifts:
-                sections.append(f"- `{path}`: {drift}")
+                if isinstance(drift, dict):
+                    severity = drift.get("severity", "minor")
+                    severity_icon = {"critical": "🔴", "major": "🟡", "minor": "⚪"}.get(severity, "⚪")
+                    sections.append(f"- {severity_icon} `{path}` [{severity}]: {drift.get('description', '')}")
+                else:
+                    sections.append(f"- `{path}`: {drift}")
                 debt_items += 1
         sections.append("")
 
