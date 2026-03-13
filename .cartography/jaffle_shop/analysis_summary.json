@@ -1,0 +1,96 @@
+{
+  "surveyor": {
+    "total_files_scanned": 8,
+    "modules_parsed": 8,
+    "top_architectural_hubs": [
+      {
+        "path": "dbt_project.yml",
+        "pagerank": 0.125
+      },
+      {
+        "path": "models/customers.sql",
+        "pagerank": 0.125
+      },
+      {
+        "path": "models/orders.sql",
+        "pagerank": 0.125
+      },
+      {
+        "path": "models/schema.yml",
+        "pagerank": 0.125
+      },
+      {
+        "path": "models/staging/schema.yml",
+        "pagerank": 0.125
+      },
+      {
+        "path": "models/staging/stg_customers.sql",
+        "pagerank": 0.125
+      },
+      {
+        "path": "models/staging/stg_orders.sql",
+        "pagerank": 0.125
+      },
+      {
+        "path": "models/staging/stg_payments.sql",
+        "pagerank": 0.125
+      }
+    ],
+    "circular_dependencies": [],
+    "dead_code_candidates": [],
+    "high_velocity_files": []
+  },
+  "hydrologist": {
+    "total_transformations": 5,
+    "total_datasets": 5,
+    "sql_files_analyzed": 5,
+    "python_files_scanned": 0,
+    "data_sources": [
+      "raw_customers",
+      "raw_orders",
+      "raw_payments"
+    ],
+    "data_sinks": [
+      "customers",
+      "orders"
+    ],
+    "lineage_nodes": 13,
+    "lineage_edges": 13
+  },
+  "semanticist": {
+    "purpose_statements": {
+      "dbt_project.yml": "This configuration file acts as the central manifest for a data transformation project, defining the project's scope, directory structure, and execution parameters. It establishes global materialization strategies to ensure that staging data remains virtual while final outputs are persisted as physical tables in the data warehouse. By enforcing these standards, it enables the systematic organization and deployment of analytics engineering assets.",
+      "models/customers.sql": "This module generates a comprehensive customer view that combines profile details with aggregated purchase history and lifetime value metrics. It provides key business insights regarding customer engagement, such as order frequency and total revenue contribution. The resulting dataset supports downstream analytics for marketing segmentation and financial reporting.",
+      "models/orders.sql": "This module creates a unified view of sales orders by enriching basic order information with detailed financial breakdowns. It calculates the total monetary value for each order and allocates that amount across various payment methods, such as credit cards and coupons. This data structure supports financial reconciliation and sales analysis by linking order status to revenue composition.",
+      "models/schema.yml": "This module defines the structural metadata and data quality constraints for core e-commerce entities, specifically customers and orders. It establishes validation rules, such as uniqueness and referential integrity, to ensure the accuracy of customer demographics and sales transaction data. By documenting column attributes and accepted values, it serves as a contract for reliable data reporting and analytics.",
+      "models/staging/schema.yml": "This module establishes data quality standards and validation rules for the customer, order, and payment domains within the staging layer. It ensures data integrity by enforcing uniqueness for primary identifiers and restricting status or payment method values to approved business lists. These constraints guarantee that only valid, consistent records are available for downstream reporting and analysis.",
+      "models/staging/stg_customers.sql": "This module prepares raw customer data for analytical use by standardizing identifiers and attributes. It acts as the primary staging layer for customer identity information, ensuring data quality and consistency before further transformation. This cleaned dataset provides a reliable foundation for downstream reporting and analysis.",
+      "models/staging/stg_orders.sql": "This module prepares raw order data for analytical use by standardizing column names and isolating essential transaction attributes. It serves as the foundational layer for order-related metrics, ensuring data consistency and readability for downstream models. By mapping technical identifiers to business-friendly terms, it establishes a clean definition of customer purchases and order status.",
+      "models/staging/stg_payments.sql": "This module prepares raw payment transaction data for downstream analysis by standardizing field names and normalizing monetary values into a readable currency format. It serves as a foundational staging layer that ensures data consistency for financial reporting and revenue tracking."
+    },
+    "doc_drift_flags": {},
+    "domain_clusters": {
+      "dbt_project.yml": "project_data",
+      "models/customers.sql": "customer_analytics marketing",
+      "models/orders.sql": "order_sales",
+      "models/schema.yml": "data_structural",
+      "models/staging/schema.yml": "payment_domains",
+      "models/staging/stg_customers.sql": "data_raw",
+      "models/staging/stg_orders.sql": "data_raw",
+      "models/staging/stg_payments.sql": "data_raw"
+    },
+    "day_one_answers": {
+      "q1": "The primary data ingestion path flows from raw sources (raw_customers, raw_orders, raw_payments) into the staging layer, where data is initially standardized. This ingestion is handled by the staging models which act as the entry point for all downstream transformations. Evidence: models/staging/stg_customers.sql, models/staging/stg_orders.sql, models/staging/stg_payments.sql.",
+      "q2": "The most critical output datasets are the 'customers' and 'orders' models, which are identified as the project's final data sinks. These models aggregate business value and serve as the endpoints for downstream analytics and reporting. Evidence: models/customers.sql, models/orders.sql.",
+      "q3": "If the 'models/orders.sql' module fails, the blast radius would encompass the 'orders' data sink and potentially the 'customers' model, which relies on order history for lifetime value calculations. This failure would sever the data supply chain for financial reconciliation and marketing segmentation. Evidence: models/orders.sql, models/customers.sql.",
+      "q4": "Business logic is concentrated in the final transformation models ('customers.sql' and 'orders.sql'), which perform complex aggregations and joins, while the staging layer handles distributed, lightweight standardization. This architecture ensures that heavy computational logic is centralized near the output layer. Evidence: models/customers.sql, models/orders.sql, models/staging/stg_customers.sql.",
+      "q5": "The analysis indicates that no files have been identified as high velocity, suggesting the codebase has been stable or static recently. The surveyor results explicitly list an empty array for high velocity files, confirming a lack of recent rapid changes. Evidence: surveyor -> high_velocity_files: []."
+    },
+    "llm_provider": "ollama",
+    "token_budget": {
+      "used": 4849,
+      "max": 500000,
+      "calls": 9
+    }
+  }
+}
