@@ -266,6 +266,21 @@ class Orchestrator:
 
         results: dict[str, Any] = {}
 
+        # Default empty results so later agents can work even if an earlier
+        # agent fails.  The pipeline uses graceful degradation: a failure in
+        # one phase does not abort subsequent phases.
+        surveyor_results: dict[str, Any] = {}
+        hydrologist_results: dict[str, Any] = {}
+        semanticist_results: dict[str, Any] = {
+            "purpose_statements": {},
+            "doc_drift_flags": {},
+            "domain_clusters": {},
+            "day_one_answers": {f"q{i}": "Agent did not run" for i in range(1, 6)},
+            "llm_provider": "none",
+            "token_budget": {"used": 0, "max": 0},
+        }
+        agent_errors: dict[str, str] = {}
+
         with Progress(
             SpinnerColumn(),
             TextColumn("[progress.description]{task.description}"),
@@ -273,57 +288,81 @@ class Orchestrator:
         ) as progress:
             # --- Phase 1: Surveyor ---
             task = progress.add_task("Running Surveyor (static structure)…", total=None)
-            surveyor_results = self.surveyor.run(
-                repo_root, self.knowledge_graph, changed_files=surveyor_changed
-            )
-            results["surveyor"] = surveyor_results
-            trace_logger.log(
-                agent="surveyor",
-                action="analysis_complete",
-                details={"modules_parsed": surveyor_results.get("modules_parsed", 0)},
-            )
-            progress.update(task, completed=True, description="✓ Surveyor complete")
+            try:
+                surveyor_results = self.surveyor.run(
+                    repo_root, self.knowledge_graph, changed_files=surveyor_changed
+                )
+                results["surveyor"] = surveyor_results
+                trace_logger.log(
+                    agent="surveyor",
+                    action="analysis_complete",
+                    details={"modules_parsed": surveyor_results.get("modules_parsed", 0)},
+                )
+                progress.update(task, completed=True, description="✓ Surveyor complete")
+            except Exception as exc:
+                agent_errors["surveyor"] = str(exc)
+                logger.error("Surveyor failed: %s", exc, exc_info=True)
+                trace_logger.log(
+                    agent="surveyor", action="failed", details={"error": str(exc)},
+                )
+                progress.update(task, completed=True, description="✗ Surveyor failed")
 
             # --- Phase 2: Hydrologist ---
             task = progress.add_task("Running Hydrologist (data lineage)…", total=None)
-            hydrologist_results = self.hydrologist.run(
-                repo_root, self.knowledge_graph, changed_files=hydrologist_changed
-            )
-            results["hydrologist"] = hydrologist_results
-            trace_logger.log(
-                agent="hydrologist",
-                action="analysis_complete",
-                details={
-                    "transformations": hydrologist_results.get("total_transformations", 0),
-                    "datasets": hydrologist_results.get("total_datasets", 0),
-                },
-            )
-            progress.update(task, completed=True, description="✓ Hydrologist complete")
+            try:
+                hydrologist_results = self.hydrologist.run(
+                    repo_root, self.knowledge_graph, changed_files=hydrologist_changed
+                )
+                results["hydrologist"] = hydrologist_results
+                trace_logger.log(
+                    agent="hydrologist",
+                    action="analysis_complete",
+                    details={
+                        "transformations": hydrologist_results.get("total_transformations", 0),
+                        "datasets": hydrologist_results.get("total_datasets", 0),
+                    },
+                )
+                progress.update(task, completed=True, description="✓ Hydrologist complete")
+            except Exception as exc:
+                agent_errors["hydrologist"] = str(exc)
+                logger.error("Hydrologist failed: %s", exc, exc_info=True)
+                trace_logger.log(
+                    agent="hydrologist", action="failed", details={"error": str(exc)},
+                )
+                progress.update(task, completed=True, description="✗ Hydrologist failed")
 
             # --- Phase 3: Semanticist ---
             task = progress.add_task("Running Semanticist (LLM analysis)…", total=None)
-            semanticist_results = self.semanticist.run(
-                repo_root,
-                self.knowledge_graph,
-                surveyor_results=surveyor_results,
-                hydrologist_results=hydrologist_results,
-                changed_modules=semanticist_changed,
-            )
-            results["semanticist"] = semanticist_results
-            trace_logger.log(
-                agent="semanticist",
-                action="analysis_complete",
-                evidence_source="llm_inference",
-                details={
-                    "provider": semanticist_results.get("llm_provider", "none"),
-                    "purpose_statements": len(semanticist_results.get("purpose_statements", {})),
-                    "token_budget": semanticist_results.get("token_budget", {}),
-                },
-            )
-            if self.semanticist.available:
-                progress.update(task, completed=True, description="✓ Semanticist complete")
-            else:
-                progress.update(task, completed=True, description="⊘ Semanticist skipped (no LLM)")
+            try:
+                semanticist_results = self.semanticist.run(
+                    repo_root,
+                    self.knowledge_graph,
+                    surveyor_results=surveyor_results,
+                    hydrologist_results=hydrologist_results,
+                    changed_modules=semanticist_changed,
+                )
+                results["semanticist"] = semanticist_results
+                trace_logger.log(
+                    agent="semanticist",
+                    action="analysis_complete",
+                    evidence_source="llm_inference",
+                    details={
+                        "provider": semanticist_results.get("llm_provider", "none"),
+                        "purpose_statements": len(semanticist_results.get("purpose_statements", {})),
+                        "token_budget": semanticist_results.get("token_budget", {}),
+                    },
+                )
+                if self.semanticist.available:
+                    progress.update(task, completed=True, description="✓ Semanticist complete")
+                else:
+                    progress.update(task, completed=True, description="⊘ Semanticist skipped (no LLM)")
+            except Exception as exc:
+                agent_errors["semanticist"] = str(exc)
+                logger.error("Semanticist failed: %s", exc, exc_info=True)
+                trace_logger.log(
+                    agent="semanticist", action="failed", details={"error": str(exc)},
+                )
+                progress.update(task, completed=True, description="✗ Semanticist failed")
 
             # --- Phase 4: Serialize core graphs ---
             task = progress.add_task("Serializing knowledge graph…", total=None)
@@ -343,16 +382,24 @@ class Orchestrator:
 
             # --- Phase 5: Archivist ---
             task = progress.add_task("Running Archivist (living context)…", total=None)
-            archivist_results = self.archivist.run(
-                repo_root,
-                self.knowledge_graph,
-                surveyor_results,
-                hydrologist_results,
-                semanticist_results,
-                cartography_dir,
-            )
-            results["archivist"] = archivist_results
-            progress.update(task, completed=True, description="✓ Archivist complete")
+            try:
+                archivist_results = self.archivist.run(
+                    repo_root,
+                    self.knowledge_graph,
+                    surveyor_results,
+                    hydrologist_results,
+                    semanticist_results,
+                    cartography_dir,
+                )
+                results["archivist"] = archivist_results
+                progress.update(task, completed=True, description="✓ Archivist complete")
+            except Exception as exc:
+                agent_errors["archivist"] = str(exc)
+                logger.error("Archivist failed: %s", exc, exc_info=True)
+                trace_logger.log(
+                    agent="archivist", action="failed", details={"error": str(exc)},
+                )
+                progress.update(task, completed=True, description="✗ Archivist failed")
 
         # Save incremental state
         _save_state(cartography_dir, repo_root)
@@ -360,9 +407,17 @@ class Orchestrator:
         # Print summary table
         elapsed = time.monotonic() - start_time
         graph_summary = self.knowledge_graph.summary()
+        run_mode = "Incremental" if incremental_run else "Full"
+
+        error_lines = ""
+        if agent_errors:
+            error_lines = "\n\n  [bold red]Agent Errors:[/bold red]\n"
+            for agent_name, error_msg in agent_errors.items():
+                error_lines += f"    {agent_name}: {error_msg[:80]}\n"
+
         console.print()
         console.print(Panel(
-            f"[bold green]Analysis Complete[/bold green] ({elapsed:.1f}s)\n\n"
+            f"[bold green]Analysis Complete[/bold green] ({elapsed:.1f}s) — {run_mode} run\n\n"
             f"  Modules parsed:      {graph_summary['modules']}\n"
             f"  Functions extracted:  {graph_summary['functions']}\n"
             f"  Datasets discovered: {graph_summary['datasets']}\n"
@@ -372,13 +427,15 @@ class Orchestrator:
             f"  Total graph edges:   {graph_summary['total_edges']}\n\n"
             f"  LLM provider:        {semanticist_results.get('llm_provider', 'none')}\n"
             f"  Purpose statements:  {len(semanticist_results.get('purpose_statements', {}))}\n\n"
-            f"  Artifacts → {cartography_dir}",
+            f"  Artifacts → {cartography_dir}{error_lines}",
             title="📊 Summary",
-            border_style="green",
+            border_style="green" if not agent_errors else "yellow",
         ))
 
         results["graph_summary"] = graph_summary
+        results["agent_errors"] = agent_errors
         return results
+
 
     def _resolve_repo(self, repo_input: str) -> Path:
         """
