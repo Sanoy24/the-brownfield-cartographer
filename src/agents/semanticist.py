@@ -39,13 +39,30 @@ class LLMConfig:
     """
     Dynamic LLM configuration resolved from environment variables.
 
-    Supports the following providers (checked in order):
+    Supports the following providers (checked in priority order):
       - OPENAI_API_KEY     → OpenAI (gpt-4o-mini default)
       - GEMINI_API_KEY     → Google Gemini (gemini-2.0-flash default)
       - OPENROUTER_API_KEY → OpenRouter (any model via openrouter.ai)
       - OLLAMA_BASE_URL    → Ollama local (llama3 default)
 
-    Override the model name with LLM_MODEL env var.
+    Model Tiering & Cost Optimization
+    ----------------------------------
+    The default models are chosen to balance quality and cost:
+
+    | Tier     | Provider    | Default Model             | Cost   | Quality |
+    |----------|-------------|---------------------------|--------|---------|
+    | Premium  | OpenAI      | gpt-4o-mini               | ~$0.15/1M | High    |
+    | Free     | Gemini      | gemini-2.0-flash          | Free   | Good    |
+    | Free     | OpenRouter  | gemini-2.0-flash-exp:free | Free   | Good    |
+    | Local    | Ollama      | llama3                    | Free   | Varies  |
+
+    Override the model with ``LLM_MODEL=<model-name>`` in your ``.env``.
+    For large codebases, prefer cheaper/faster models (Gemini Flash, GPT-4o-mini)
+    to keep costs manageable.  The ``ContextWindowBudget`` tracks cumulative usage
+    and halts LLM calls when the budget is exhausted (default: 500K tokens).
+
+    Set ``SEMANTICIST_MAX_MODULES`` to limit how many modules are analyzed per run
+    (default: 60).  This is the primary cost lever for large repositories.
     """
 
     provider: str = ""
