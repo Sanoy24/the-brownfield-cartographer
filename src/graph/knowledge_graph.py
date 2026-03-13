@@ -140,6 +140,77 @@ class KnowledgeGraph:
         )
 
     # ------------------------------------------------------------------
+    # Node/edge removal (for incremental updates)
+    # ------------------------------------------------------------------
+
+    def clear(self) -> None:
+        """Clear the entire graph and all internal indices. Used before load_replace."""
+        self.graph.clear()
+        self._module_nodes.clear()
+        self._dataset_nodes.clear()
+        self._function_nodes.clear()
+        self._transformation_nodes.clear()
+
+    def remove_module_node(self, path: str) -> None:
+        """Remove a module node and all edges incident to it. Used in incremental updates."""
+        if path in self._module_nodes:
+            del self._module_nodes[path]
+        if self.graph.has_node(path):
+            self.graph.remove_node(path)
+
+    def remove_import_edges_for_module(self, path: str) -> None:
+        """Remove all IMPORTS edges where path is source or target."""
+        to_remove = [
+            (u, v) for u, v, d in self.graph.edges(data=True)
+            if d.get("edge_type") == "IMPORTS" and (u == path or v == path)
+        ]
+        self.graph.remove_edges_from(to_remove)
+
+    def remove_function_nodes_for_module(self, module_path: str) -> None:
+        """Remove all function nodes whose parent_module is the given path."""
+        to_remove = [
+            n for n, d in self.graph.nodes(data=True)
+            if d.get("node_type") == "function" and d.get("parent_module") == module_path
+        ]
+        for n in to_remove:
+            self.graph.remove_node(n)
+            self._function_nodes.pop(n, None)
+
+    def remove_transformation_nodes_for_files(self, file_paths: set[str]) -> None:
+        """Remove all transformation nodes whose source_file is in file_paths (and their edges)."""
+        to_remove = [
+            n for n, d in self.graph.nodes(data=True)
+            if d.get("node_type") == "transformation" and d.get("source_file") in file_paths
+        ]
+        for n in to_remove:
+            self.graph.remove_node(n)
+        self._transformation_nodes = [
+            t for t in self._transformation_nodes
+            if t.source_file not in file_paths
+        ]
+
+    def load_from_artifacts_replace(self, cartography_dir: Path) -> None:
+        """
+        Clear the graph and replace with state from .cartography/ artifacts.
+
+        Used for incremental updates: load previous run, then re-analyze only
+        changed files and merge.
+        """
+        self.clear()
+        module_path = cartography_dir / "module_graph.json"
+        if module_path.exists():
+            self.load_module_graph(module_path)
+        lineage_path = cartography_dir / "lineage_graph.json"
+        if lineage_path.exists():
+            self.load_lineage_graph(lineage_path)
+        logger.info(
+            "KnowledgeGraph replaced from %s — %d nodes, %d edges",
+            cartography_dir,
+            self.graph.number_of_nodes(),
+            self.graph.number_of_edges(),
+        )
+
+    # ------------------------------------------------------------------
     # Query helpers
     # ------------------------------------------------------------------
 
@@ -244,6 +315,8 @@ class KnowledgeGraph:
                 self._module_nodes[node_id] = ModuleNode(
                     path=node_id,
                     language=attrs.get("language", "unknown"),
+                    purpose_statement=attrs.get("purpose_statement"),
+                    domain_cluster=attrs.get("domain_cluster"),
                     lines_of_code=attrs.get("lines_of_code", 0),
                     complexity_score=attrs.get("complexity_score", 0.0),
                     change_velocity_30d=attrs.get("change_velocity_30d", 0),
@@ -322,12 +395,16 @@ class KnowledgeGraph:
 
     def summary(self) -> dict[str, Any]:
         """Return a quick summary of graph contents."""
+        transformation_count = sum(
+            1 for _, d in self.graph.nodes(data=True)
+            if d.get("node_type") == "transformation"
+        )
         return {
             "total_nodes": self.graph.number_of_nodes(),
             "total_edges": self.graph.number_of_edges(),
             "modules": len(self._module_nodes),
             "datasets": len(self._dataset_nodes),
             "functions": len(self._function_nodes),
-            "transformations": len(self._transformation_nodes),
+            "transformations": transformation_count,
             "circular_dependencies": len(self.find_circular_dependencies()),
         }
