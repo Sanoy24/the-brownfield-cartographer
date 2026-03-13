@@ -8,6 +8,7 @@ from src.models.schemas import (
     ConsumesEdge,
     CallsEdge,
     ConfiguresEdge,
+    Language,
     StorageType,
     TransformationType,
 )
@@ -22,6 +23,7 @@ __all__ = [
     "ConsumesEdge",
     "CallsEdge",
     "ConfiguresEdge",
+    "Language",
     "StorageType",
     "TransformationType",
 ]
