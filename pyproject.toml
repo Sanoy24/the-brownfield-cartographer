@@ -1,6 +1,6 @@
 [project]
 name = "the-brownfield-cartographer"
-version = "0.1.0"
+version = "0.2.0"
 description = """TRP 1 Week 4: The Brownfield Cartographer
 Engineering Codebase Intelligence Systems for Rapid FDE Onboarding in Production Environments
 """
@@ -10,17 +10,30 @@ authors = [
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    # Core
     "typer>=0.12",
     "pydantic>=2.0",
     "networkx>=3.3",
+    "rich>=13.0",
+    "PyYAML>=6.0",
+    "gitpython>=3.1",
+    # Static analysis
     "tree-sitter>=0.23",
     "tree-sitter-python>=0.23",
     "sqlglot>=25.0",
-    "PyYAML>=6.0",
-    "gitpython>=3.1",
-    "rich>=13.0",
+    # Graph analysis
     "numpy>=1.26",
-    "scipy>=1.17.1",
+    "scipy>=1.14",
+    # LLM & Agent (dynamic provider support)
+    "langchain-core>=0.3",
+    "langchain-openai>=0.3",
+    "langchain-google-genai>=2.0",
+    "langchain-ollama>=0.3",
+    "langgraph>=0.2",
+    # Domain clustering
+    "scikit-learn>=1.5",
+    # Environment
+    "python-dotenv>=1.0",
 ]
 
 [project.scripts]
