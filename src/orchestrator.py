@@ -40,6 +40,15 @@ def _is_github_url(repo_input: str) -> bool:
     return parsed.scheme in ("http", "https") and "github" in parsed.netloc
 
 
+def _derive_repo_name(repo_input: str) -> str:
+    """Derive a clean repository name from URL or local path."""
+    if _is_github_url(repo_input):
+        path = urlparse(repo_input).path
+        return path.strip("/").split("/")[-1].replace(".git", "")
+    else:
+        return Path(repo_input).name
+
+
 def _clone_repo(url: str, target_dir: Path) -> Path:
     """
     Clone a GitHub repository to a local directory.
@@ -194,7 +203,8 @@ class Orchestrator:
         else:
             artifact_root = repo_root
 
-        cartography_dir = artifact_root / ".cartography"
+        repo_name = _derive_repo_name(repo_input)
+        cartography_dir = artifact_root / ".cartography" / repo_name
         cartography_dir.mkdir(parents=True, exist_ok=True)
 
         # Initialize trace logger
