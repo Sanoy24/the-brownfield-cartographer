@@ -14,6 +14,8 @@ from collections import deque
 from pathlib import Path
 from typing import Any
 
+import networkx as nx
+
 from src.analyzers.dag_config_parser import parse_airflow_dag, parse_dbt_project
 from src.analyzers.sql_lineage import analyze_sql_file
 from src.graph.knowledge_graph import KnowledgeGraph
@@ -135,11 +137,12 @@ class Hydrologist:
         self,
         repo_root: Path,
         knowledge_graph: KnowledgeGraph,
+        changed_files: set[str] | None = None,
     ) -> dict[str, Any]:
         """
-        Execute full data lineage analysis on the given repository.
+        Execute full or incremental data lineage analysis on the given repository.
 
-        Steps:
+        Steps (full run):
           1. Detect if repo is a dbt project → parse dbt model DAG
           2. Scan all .sql files → extract SQL lineage via sqlglot
           3. Scan all .py files → detect pandas/spark/SQLAlchemy data flows
@@ -147,69 +150,32 @@ class Hydrologist:
           5. Populate the knowledge graph with all discovered lineage
           6. Compute sources (in-degree=0) and sinks (out-degree=0)
 
+        When changed_files is provided (incremental): remove lineage for those files,
+        then re-analyze only those files (SQL, Python, DAG) and add new transformations.
+        dbt project-level parsing is not re-run in incremental (only file-level SQL/Python).
+
         Args:
             repo_root: Absolute path to the repository root.
-            knowledge_graph: Shared KnowledgeGraph to populate.
+            knowledge_graph: Shared KnowledgeGraph to populate or update.
+            changed_files: If set, only these paths are re-analyzed; existing
+                transformations for these files are removed first.
 
         Returns:
             Summary dict with lineage statistics and key data assets.
         """
+        if changed_files is not None:
+            return self._run_incremental(repo_root, knowledge_graph, changed_files)
+
         logger.info("Hydrologist: analyzing data flows in %s", repo_root)
+        all_transformations, all_datasets, sql_count, py_count = self._collect_lineage_full(
+            repo_root, knowledge_graph
+        )
 
-        all_transformations: list[TransformationNode] = []
-        all_datasets: list[DatasetNode] = []
-
-        # Step 1: Check if this is a dbt project
-        dbt_project_file = repo_root / "dbt_project.yml"
-        if dbt_project_file.exists():
-            logger.info("Detected dbt project — parsing model DAG")
-            dbt_results = parse_dbt_project(repo_root)
-            all_transformations.extend(dbt_results["transformations"])
-            all_datasets.extend(dbt_results["datasets"])
-
-            # Add config edges
-            for edge in dbt_results["config_edges"]:
-                knowledge_graph.add_configures_edge(edge.source, edge.target)
-
-        # Step 2: Scan SQL files for lineage
-        sql_files = list(repo_root.rglob("*.sql"))
-        sql_files = [
-            f for f in sql_files
-            if not any(skip in f.parts for skip in {".git", "node_modules", "__pycache__", ".venv"})
-        ]
-
-        for sql_file in sql_files:
-            sql_transformations = analyze_sql_file(sql_file, repo_root)
-            all_transformations.extend(sql_transformations)
-
-        logger.info("Analyzed %d SQL files", len(sql_files))
-
-        # Step 3: Scan Python files for data flow
-        py_files = list(repo_root.rglob("*.py"))
-        py_files = [
-            f for f in py_files
-            if not any(skip in f.parts for skip in {".git", "node_modules", "__pycache__", ".venv"})
-        ]
-
-        for py_file in py_files:
-            py_transforms = _analyze_python_data_flow(py_file, repo_root)
-            all_transformations.extend(py_transforms)
-
-        # Step 4: Check for Airflow DAG files
-        dags_dir = repo_root / "dags"
-        if dags_dir.exists():
-            for dag_file in dags_dir.rglob("*.py"):
-                airflow_transforms = parse_airflow_dag(dag_file, repo_root)
-                all_transformations.extend(airflow_transforms)
-
-        # Step 5: Populate the knowledge graph
         for dataset in all_datasets:
             knowledge_graph.add_dataset_node(dataset)
-
         for transformation in all_transformations:
             knowledge_graph.add_transformation_node(transformation)
 
-        # Step 6: Compute sources and sinks
         lineage_subgraph = knowledge_graph.get_lineage_subgraph()
         sources = self._find_sources(lineage_subgraph)
         sinks = self._find_sinks(lineage_subgraph)
@@ -217,19 +183,110 @@ class Hydrologist:
         summary = {
             "total_transformations": len(all_transformations),
             "total_datasets": len(all_datasets),
-            "sql_files_analyzed": len(sql_files),
-            "python_files_scanned": len(py_files),
+            "sql_files_analyzed": sql_count,
+            "python_files_scanned": py_count,
             "data_sources": sorted(sources),
             "data_sinks": sorted(sinks),
             "lineage_nodes": lineage_subgraph.number_of_nodes(),
             "lineage_edges": lineage_subgraph.number_of_edges(),
         }
-
         logger.info(
             "Hydrologist complete: %d transformations, %d sources, %d sinks",
-            len(all_transformations),
-            len(sources),
-            len(sinks),
+            len(all_transformations), len(sources), len(sinks),
+        )
+        return summary
+
+    def _collect_lineage_full(
+        self, repo_root: Path, knowledge_graph: KnowledgeGraph
+    ) -> tuple[list[TransformationNode], list[DatasetNode], int, int]:
+        """Full repo lineage collection (dbt + all SQL + all Python + Airflow)."""
+        all_transformations: list[TransformationNode] = []
+        all_datasets: list[DatasetNode] = []
+
+        dbt_project_file = repo_root / "dbt_project.yml"
+        if dbt_project_file.exists():
+            logger.info("Detected dbt project — parsing model DAG")
+            dbt_results = parse_dbt_project(repo_root)
+            all_transformations.extend(dbt_results["transformations"])
+            all_datasets.extend(dbt_results["datasets"])
+            for edge in dbt_results["config_edges"]:
+                knowledge_graph.add_configures_edge(edge.source, edge.target)
+
+        sql_files = [
+            f for f in repo_root.rglob("*.sql")
+            if not any(skip in f.parts for skip in {".git", "node_modules", "__pycache__", ".venv"})
+        ]
+        for sql_file in sql_files:
+            all_transformations.extend(analyze_sql_file(sql_file, repo_root))
+        logger.info("Analyzed %d SQL files", len(sql_files))
+
+        py_files = [
+            f for f in repo_root.rglob("*.py")
+            if not any(skip in f.parts for skip in {".git", "node_modules", "__pycache__", ".venv"})
+        ]
+        for py_file in py_files:
+            all_transformations.extend(_analyze_python_data_flow(py_file, repo_root))
+
+        dags_dir = repo_root / "dags"
+        if dags_dir.exists():
+            for dag_file in dags_dir.rglob("*.py"):
+                all_transformations.extend(parse_airflow_dag(dag_file, repo_root))
+
+        return all_transformations, all_datasets, len(sql_files), len(py_files)
+
+    def _run_incremental(
+        self,
+        repo_root: Path,
+        knowledge_graph: KnowledgeGraph,
+        changed_files: set[str],
+    ) -> dict[str, Any]:
+        """Re-analyze lineage only for changed files and merge into the graph."""
+        logger.info("Hydrologist: incremental update for %d changed files", len(changed_files))
+        knowledge_graph.remove_transformation_nodes_for_files(changed_files)
+
+        all_transformations: list[TransformationNode] = []
+        all_datasets: list[DatasetNode] = []
+        sql_count = 0
+        py_count = 0
+
+        for rel_path in changed_files:
+            if not rel_path.strip():
+                continue
+            path = (repo_root / rel_path).resolve()
+            if not path.exists() or not path.is_file():
+                continue
+            if rel_path.endswith(".sql"):
+                all_transformations.extend(analyze_sql_file(path, repo_root))
+                sql_count += 1
+            elif rel_path.endswith(".py"):
+                if "dags" in path.parts:
+                    all_transformations.extend(parse_airflow_dag(path, repo_root))
+                else:
+                    all_transformations.extend(_analyze_python_data_flow(path, repo_root))
+                py_count += 1
+
+        for dataset in all_datasets:
+            knowledge_graph.add_dataset_node(dataset)
+        for transformation in all_transformations:
+            knowledge_graph.add_transformation_node(transformation)
+
+        lineage_subgraph = knowledge_graph.get_lineage_subgraph()
+        sources = self._find_sources(lineage_subgraph)
+        sinks = self._find_sinks(lineage_subgraph)
+
+        summary = {
+            "total_transformations": len(all_transformations),
+            "total_datasets": len(all_datasets),
+            "sql_files_analyzed": sql_count,
+            "python_files_scanned": py_count,
+            "data_sources": sorted(sources),
+            "data_sinks": sorted(sinks),
+            "lineage_nodes": lineage_subgraph.number_of_nodes(),
+            "lineage_edges": lineage_subgraph.number_of_edges(),
+        }
+        logger.info(
+            "Hydrologist incremental complete: %d new transformations, %d sources, %d sinks",
+            len(all_transformations), len(sources), len(sinks),
         )
         return summary
 
