@@ -34,101 +34,137 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 
+# Default model assignments per provider: (fast_model, strong_model)
+# Fast tier  = cheap/fast model for bulk purpose extraction
+# Strong tier = higher-quality model for synthesis tasks (Day-One Q&A)
+_PROVIDER_MODEL_TIERS: dict[str, tuple[str, str]] = {
+    "openai": ("gpt-4o-mini", "gpt-4o"),
+    "gemini": ("gemini-2.0-flash", "gemini-2.5-flash-preview-05-20"),
+    "openrouter": (
+        "google/gemini-2.0-flash-exp:free",
+        "google/gemini-2.5-flash-preview-05-20",
+    ),
+    "ollama": ("llama3", "llama3"),  # single model typically
+}
+
+
 @dataclass
 class LLMConfig:
     """
     Dynamic LLM configuration resolved from environment variables.
 
     Supports the following providers (checked in priority order):
-      - OPENAI_API_KEY     → OpenAI (gpt-4o-mini default)
-      - GEMINI_API_KEY     → Google Gemini (gemini-2.0-flash default)
-      - OPENROUTER_API_KEY → OpenRouter (any model via openrouter.ai)
-      - OLLAMA_BASE_URL    → Ollama local (llama3 default)
+      - OPENAI_API_KEY     → OpenAI
+      - GEMINI_API_KEY     → Google Gemini
+      - OPENROUTER_API_KEY → OpenRouter
+      - OLLAMA_BASE_URL    → Ollama local
 
-    Model Tiering & Cost Optimization
-    ----------------------------------
-    The default models are chosen to balance quality and cost:
+    Model Tiering
+    -------------
+    The Semanticist uses **two model tiers** driven by the token budget:
 
-    | Tier     | Provider    | Default Model             | Cost   | Quality |
-    |----------|-------------|---------------------------|--------|---------|
-    | Premium  | OpenAI      | gpt-4o-mini               | ~$0.15/1M | High    |
-    | Free     | Gemini      | gemini-2.0-flash          | Free   | Good    |
-    | Free     | OpenRouter  | gemini-2.0-flash-exp:free | Free   | Good    |
-    | Local    | Ollama      | llama3                    | Free   | Varies  |
+      * **Fast tier** (`LLM_MODEL_FAST`) — cheap / high-throughput model used
+        for bulk work such as per-module purpose extraction and drift detection.
+      * **Strong tier** (`LLM_MODEL_STRONG`) — higher-quality model reserved
+        for synthesis tasks that need deeper reasoning (Day-One Q&A).
 
-    Override the model with ``LLM_MODEL=<model-name>`` in your ``.env``.
-    For large codebases, prefer cheaper/faster models (Gemini Flash, GPT-4o-mini)
-    to keep costs manageable.  The ``ContextWindowBudget`` tracks cumulative usage
-    and halts LLM calls when the budget is exhausted (default: 500K tokens).
+    Defaults per provider:
 
-    Set ``SEMANTICIST_MAX_MODULES`` to limit how many modules are analyzed per run
-    (default: 60).  This is the primary cost lever for large repositories.
+    | Provider    | Fast (bulk)                      | Strong (synthesis)               |
+    |-------------|----------------------------------|----------------------------------|
+    | OpenAI      | gpt-4o-mini                      | gpt-4o                           |
+    | Gemini      | gemini-2.0-flash                 | gemini-2.5-flash-preview-05-20   |
+    | OpenRouter  | gemini-2.0-flash-exp:free        | gemini-2.5-flash-preview-05-20   |
+    | Ollama      | llama3                           | llama3                           |
+
+    Override with ``LLM_MODEL_FAST`` / ``LLM_MODEL_STRONG`` env vars.
+    The legacy ``LLM_MODEL`` env var overrides **both** tiers to the same model
+    (disabling tiering).  ``SEMANTICIST_MAX_MODULES`` (default 60) is the
+    primary cost lever for large repositories.
     """
 
     provider: str = ""
     api_key: str = ""
-    model: str = ""
+    fast_model: str = ""
+    strong_model: str = ""
     base_url: str = ""
+
+    # Legacy single-model accessor for Navigator / other consumers
+    @property
+    def model(self) -> str:
+        return self.fast_model or self.strong_model
 
     @classmethod
     def from_env(cls) -> "LLMConfig":
         """Resolve the best available LLM provider from environment."""
-        model_override = os.getenv("LLM_MODEL", "")
+        # Legacy override: sets both tiers to the same model
+        legacy_override = os.getenv("LLM_MODEL", "")
+        fast_override = os.getenv("LLM_MODEL_FAST", "") or legacy_override
+        strong_override = os.getenv("LLM_MODEL_STRONG", "") or legacy_override
+
+        def _resolve(provider: str, api_key: str = "", base_url: str = "") -> "LLMConfig":
+            default_fast, default_strong = _PROVIDER_MODEL_TIERS.get(
+                provider, ("llama3", "llama3")
+            )
+            return cls(
+                provider=provider,
+                api_key=api_key,
+                fast_model=fast_override or default_fast,
+                strong_model=strong_override or default_strong,
+                base_url=base_url,
+            )
 
         if api_key := os.getenv("OPENAI_API_KEY", ""):
-            return cls(
-                provider="openai",
-                api_key=api_key,
-                model=model_override or "gpt-4o-mini",
-            )
+            return _resolve("openai", api_key=api_key)
         if api_key := os.getenv("GEMINI_API_KEY", ""):
-            return cls(
-                provider="gemini",
-                api_key=api_key,
-                model=model_override or "gemini-2.0-flash",
-            )
+            return _resolve("gemini", api_key=api_key)
         if api_key := os.getenv("OPENROUTER_API_KEY", ""):
-            return cls(
-                provider="openrouter",
+            return _resolve(
+                "openrouter",
                 api_key=api_key,
-                model=model_override or "google/gemini-2.0-flash-exp:free",
                 base_url="https://openrouter.ai/api/v1",
             )
         if base_url := os.getenv("OLLAMA_BASE_URL", ""):
-            return cls(
-                provider="ollama",
-                base_url=base_url,
-                model=model_override or "llama3",
-            )
+            return _resolve("ollama", base_url=base_url)
 
         return cls()  # No provider available
 
 
-def _create_chat_model(config: LLMConfig) -> Any:
+def _create_chat_model(
+    config: LLMConfig,
+    model_override: str | None = None,
+) -> Any:
     """
     Create a LangChain chat model from the resolved LLM config.
+
+    Args:
+        config: The resolved LLM configuration.
+        model_override: If provided, use this model name instead of config.model.
 
     Returns None if no provider is configured or dependencies are missing.
     """
     if not config.provider:
         logger.warning(
-            "No LLM provider configured. Set one of: OPENAI_API_KEY, GEMINI_API_KEY, OPENROUTER_API_KEY, OLLAMA_BASE_URL"
+            "No LLM provider configured. Set one of: OPENAI_API_KEY, "
+            "GEMINI_API_KEY, OPENROUTER_API_KEY, OLLAMA_BASE_URL"
         )
         return None
+
+    model_name = model_override or config.model
 
     try:
         if config.provider == "openai":
             from langchain_openai import ChatOpenAI
 
             return ChatOpenAI(
-                model=config.model, api_key=config.api_key, temperature=0.2
+                model=model_name, api_key=config.api_key, temperature=0.2
             )
 
         if config.provider == "gemini":
             from langchain_google_genai import ChatGoogleGenerativeAI
 
             return ChatGoogleGenerativeAI(
-                model=config.model,
+                model=model_name,
                 google_api_key=config.api_key,
                 temperature=0.2,
             )
@@ -137,7 +173,7 @@ def _create_chat_model(config: LLMConfig) -> Any:
             from langchain_openai import ChatOpenAI
 
             return ChatOpenAI(
-                model=config.model,
+                model=model_name,
                 api_key=config.api_key,
                 base_url=config.base_url,
                 temperature=0.2,
@@ -147,7 +183,7 @@ def _create_chat_model(config: LLMConfig) -> Any:
             from langchain_ollama import ChatOllama
 
             return ChatOllama(
-                model=config.model,
+                model=model_name,
                 base_url=config.base_url,
                 temperature=0.2,
             )
@@ -263,18 +299,35 @@ Purpose Statement:"""
     return _invoke_llm(llm, prompt, budget)
 
 
+@dataclass
+class DriftFinding:
+    """A single documentation drift finding with structured severity."""
+
+    description: str
+    severity: str  # "critical" | "major" | "minor"
+    category: str  # "contradiction" | "omission" | "outdated" | "misleading"
+
+    def to_dict(self) -> dict[str, str]:
+        return {
+            "description": self.description,
+            "severity": self.severity,
+            "category": self.category,
+        }
+
+
 def detect_doc_drift(
     llm: Any,
     module: ModuleNode,
     source_code: str,
     purpose_statement: str,
     budget: ContextWindowBudget,
-) -> list[str]:
+) -> list[dict[str, str]]:
     """
     Compare existing docstrings against the LLM-generated purpose.
 
-    Returns a list of drift descriptions if the docstring contradicts
-    or significantly diverges from the actual implementation.
+    Returns a list of structured drift findings with severity and category:
+      - severity: "critical" (contradicts), "major" (misleading), "minor" (outdated)
+      - category: "contradiction" | "omission" | "outdated" | "misleading"
     """
     # Extract the module-level docstring
     docstring_match = re.match(
@@ -290,7 +343,12 @@ def detect_doc_drift(
         return []
 
     prompt = f"""Compare this module's existing docstring against its actual purpose (determined by code analysis).
-If the docstring contradicts, misrepresents, or significantly diverges from what the code actually does, describe each discrepancy in one sentence.
+If the docstring contradicts, misrepresents, or significantly diverges from what the code actually does,
+list each discrepancy as a JSON array. For each item include:
+  - "description": one-sentence description of the drift
+  - "severity": "critical" if it contradicts the implementation, "major" if misleading, "minor" if just outdated
+  - "category": one of "contradiction", "omission", "outdated", "misleading"
+
 If they are consistent, respond with exactly: "CONSISTENT"
 
 Module: {module.path}
@@ -301,45 +359,96 @@ Existing docstring:
 Actual purpose (from code analysis):
 \"{purpose_statement}\"
 
-Discrepancies (one per line, or "CONSISTENT"):"""
+Response (JSON array or "CONSISTENT"):"""
 
     response = _invoke_llm(llm, prompt, budget)
     if not response or "CONSISTENT" in response.upper():
         return []
 
+    # Try to parse structured JSON response
+    try:
+        json_match = re.search(r"\[.*\]", response, re.DOTALL)
+        if json_match:
+            findings = json.loads(json_match.group())
+            # Validate and normalize
+            valid_severities = {"critical", "major", "minor"}
+            valid_categories = {"contradiction", "omission", "outdated", "misleading"}
+            result = []
+            for f in findings:
+                if isinstance(f, dict) and "description" in f:
+                    result.append({
+                        "description": str(f["description"]),
+                        "severity": f.get("severity", "minor")
+                            if f.get("severity") in valid_severities
+                            else "minor",
+                        "category": f.get("category", "outdated")
+                            if f.get("category") in valid_categories
+                            else "outdated",
+                    })
+            return result
+    except (json.JSONDecodeError, AttributeError):
+        pass
+
+    # Fallback: wrap raw text lines as minor/outdated findings
     return [
-        line.strip()
+        {"description": line.strip(), "severity": "minor", "category": "outdated"}
         for line in response.split("\n")
         if line.strip() and not line.strip().startswith("-")
     ]
 
 
+@dataclass
+class ClusteringResult:
+    """Domain clustering output with quality metrics and exemplars."""
+
+    assignments: dict[str, str]  # path → domain label
+    quality_metrics: dict[str, Any]  # cluster-level quality stats
+    exemplars: dict[str, list[str]]  # domain → list of representative module paths
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "assignments": self.assignments,
+            "quality_metrics": self.quality_metrics,
+            "exemplars": self.exemplars,
+        }
+
+
 def cluster_into_domains(
     purpose_statements: dict[str, str],
     n_clusters: int = 6,
-) -> dict[str, str]:
+) -> ClusteringResult:
     """
     Cluster modules into inferred business domains using TF-IDF + k-means.
 
     Groups modules by semantic similarity of their purpose statements,
     then labels each cluster by its most representative terms.
 
-    Args:
-        purpose_statements: Mapping of module path → purpose statement text.
-        n_clusters: Number of clusters (default: 6).
-
-    Returns:
-        Mapping of module path → inferred domain label.
+    Returns a ClusteringResult with:
+      - assignments: module path → domain label
+      - quality_metrics: per-cluster inertia, silhouette, member count
+      - exemplars: per-domain list of the modules closest to the centroid
     """
     if len(purpose_statements) < 3:
-        return {path: "core" for path in purpose_statements}
+        assignments = {path: "core" for path in purpose_statements}
+        return ClusteringResult(
+            assignments=assignments,
+            quality_metrics={"note": "fewer than 3 modules — all assigned to 'core'"},
+            exemplars={"core": list(purpose_statements.keys())},
+        )
 
     try:
+        import numpy as np
         from sklearn.cluster import KMeans
         from sklearn.feature_extraction.text import TfidfVectorizer
+        from sklearn.metrics import silhouette_score
     except ImportError:
         logger.warning("scikit-learn not installed — skipping domain clustering")
-        return {path: "unclustered" for path in purpose_statements}
+        assignments = {path: "unclustered" for path in purpose_statements}
+        return ClusteringResult(
+            assignments=assignments,
+            quality_metrics={"error": "scikit-learn not available"},
+            exemplars={},
+        )
 
     paths = list(purpose_statements.keys())
     texts = [purpose_statements[p] for p in paths]
@@ -358,15 +467,68 @@ def cluster_into_domains(
     kmeans = KMeans(n_clusters=k, random_state=42, n_init=10)
     labels = kmeans.fit_predict(tfidf_matrix)
 
-    # Label each cluster by its top terms
+    # --- Quality metrics ---
+    silhouette = float(silhouette_score(tfidf_matrix, labels)) if k > 1 else 1.0
+
+    # Per-cluster stats
+    cluster_stats: dict[str, dict[str, Any]] = {}
     cluster_labels: dict[int, str] = {}
+    exemplars: dict[str, list[str]] = {}
+
     for i in range(k):
         center = kmeans.cluster_centers_[i]
         top_indices = center.argsort()[-3:][::-1]
         top_terms = [feature_names[idx] for idx in top_indices]
-        cluster_labels[i] = "_".join(top_terms[:2])
+        label = "_".join(top_terms[:2])
+        cluster_labels[i] = label
 
-    return {paths[idx]: cluster_labels[label] for idx, label in enumerate(labels)}
+        # Members of this cluster
+        member_indices = [idx for idx, lbl in enumerate(labels) if lbl == i]
+        member_paths = [paths[idx] for idx in member_indices]
+
+        # Find exemplar: module closest to centroid
+        if member_indices:
+            member_vectors = tfidf_matrix[member_indices]
+            distances = np.linalg.norm(
+                member_vectors.toarray() - center.reshape(1, -1), axis=1
+            )
+            sorted_by_dist = sorted(
+                zip(member_paths, distances.tolist()), key=lambda x: x[1]
+            )
+            # Top 3 exemplars (closest to centroid)
+            exemplars[label] = [p for p, _ in sorted_by_dist[:3]]
+        else:
+            exemplars[label] = []
+
+        cluster_stats[label] = {
+            "member_count": len(member_paths),
+            "top_terms": top_terms,
+            "inertia_contribution": round(
+                float(sum(
+                    np.linalg.norm(
+                        tfidf_matrix[idx].toarray() - center.reshape(1, -1)
+                    ) ** 2
+                    for idx in member_indices
+                )),
+                4,
+            ),
+        }
+
+    quality_metrics = {
+        "n_clusters": k,
+        "total_inertia": round(float(kmeans.inertia_), 4),
+        "silhouette_score": round(silhouette, 4),
+        "clusters": cluster_stats,
+    }
+
+    assignments = {
+        paths[idx]: cluster_labels[label] for idx, label in enumerate(labels)
+    }
+    return ClusteringResult(
+        assignments=assignments,
+        quality_metrics=quality_metrics,
+        exemplars=exemplars,
+    )
 
 
 def answer_day_one_questions(
@@ -440,9 +602,11 @@ class Semanticist:
     """
     The Semanticist agent adds LLM-powered semantic understanding.
 
-    Generates purpose statements, detects documentation drift,
-    clusters modules into business domains, and answers the Five
-    FDE Day-One Questions with evidence citations.
+    Uses **two-tier model routing** driven by the token budget:
+      * **Fast tier** — cheaper/faster model for bulk per-module purpose
+        extraction and drift detection.
+      * **Strong tier** — higher-quality model reserved for synthesis tasks
+        that require deeper reasoning (Day-One Q&A).
 
     Requires an LLM API key set via environment variables.
     Gracefully degrades if no LLM is available.
@@ -450,13 +614,43 @@ class Semanticist:
 
     def __init__(self) -> None:
         self.llm_config = LLMConfig.from_env()
-        self.llm = _create_chat_model(self.llm_config)
+        # Create two LLM instances: fast for bulk, strong for synthesis
+        self.llm_fast = _create_chat_model(
+            self.llm_config, model_override=self.llm_config.fast_model or None
+        )
+        self.llm_strong = _create_chat_model(
+            self.llm_config, model_override=self.llm_config.strong_model or None
+        )
+        # Fallback: if strong fails to init, reuse fast
+        if self.llm_strong is None:
+            self.llm_strong = self.llm_fast
         self.budget = ContextWindowBudget()
+
+        if self.available:
+            fast_name = self.llm_config.fast_model
+            strong_name = self.llm_config.strong_model
+            if fast_name == strong_name:
+                logger.info(
+                    "Semanticist: using single model '%s' (set LLM_MODEL_FAST "
+                    "/ LLM_MODEL_STRONG to enable tiering)",
+                    fast_name,
+                )
+            else:
+                logger.info(
+                    "Semanticist: model tiering active — fast='%s', strong='%s'",
+                    fast_name,
+                    strong_name,
+                )
+
+    @property
+    def llm(self) -> Any:
+        """Default LLM accessor (fast tier) for backward compatibility."""
+        return self.llm_fast
 
     @property
     def available(self) -> bool:
         """Whether an LLM provider is configured and ready."""
-        return self.llm is not None
+        return self.llm_fast is not None
 
     def run(
         self,
@@ -607,8 +801,9 @@ class Semanticist:
             except OSError:
                 continue
 
+            # Use FAST tier for bulk purpose extraction
             purpose = generate_purpose_statement(
-                self.llm, module, source_code, self.budget
+                self.llm_fast, module, source_code, self.budget
             )
             if purpose:
                 consecutive_failures = 0
@@ -617,8 +812,9 @@ class Semanticist:
                 if knowledge_graph.graph.has_node(path):
                     knowledge_graph.graph.nodes[path]["purpose_statement"] = purpose
 
+                # Use FAST tier for drift detection (bulk work)
                 drift = detect_doc_drift(
-                    self.llm, module, source_code, purpose, self.budget
+                    self.llm_fast, module, source_code, purpose, self.budget
                 )
                 if drift:
                     doc_drift_flags[path] = drift
@@ -637,20 +833,31 @@ class Semanticist:
             len(doc_drift_flags),
         )
 
-        # Step 3: Domain clustering
+        # Step 3: Domain clustering (no LLM — pure sklearn)
+        clustering_result: ClusteringResult | None = None
         if purpose_statements:
-            domain_clusters = cluster_into_domains(purpose_statements)
+            clustering_result = cluster_into_domains(purpose_statements)
+            domain_clusters = clustering_result.assignments
             for path, domain in domain_clusters.items():
                 if path in module_nodes:
                     module_nodes[path].domain_cluster = domain
                     if path in knowledge_graph.graph:
                         knowledge_graph.graph.nodes[path]["domain_cluster"] = domain
 
-            logger.info("Clustered %d modules into domains", len(domain_clusters))
+            logger.info(
+                "Clustered %d modules into %d domains (silhouette=%.3f)",
+                len(domain_clusters),
+                clustering_result.quality_metrics.get("n_clusters", 0),
+                clustering_result.quality_metrics.get("silhouette_score", 0),
+            )
 
-        # Step 4: Day-One Questions
+        # Step 4: Day-One Questions — use STRONG tier for synthesis
+        logger.info(
+            "Switching to strong model '%s' for Day-One synthesis",
+            self.llm_config.strong_model,
+        )
         day_one_answers = answer_day_one_questions(
-            self.llm,
+            self.llm_strong,
             surveyor_results or {},
             hydrologist_results or {},
             purpose_statements,
@@ -669,9 +876,19 @@ class Semanticist:
             "domain_clusters": domain_clusters,
             "day_one_answers": day_one_answers,
             "llm_provider": self.llm_config.provider,
+            "model_tiering": {
+                "fast_model": self.llm_config.fast_model,
+                "strong_model": self.llm_config.strong_model,
+                "tiering_active": (
+                    self.llm_config.fast_model != self.llm_config.strong_model
+                ),
+            },
             "token_budget": {
                 "used": self.budget.used_tokens,
                 "max": self.budget.max_tokens,
                 "calls": self.budget.call_count,
             },
+            "cluster_quality": (
+                clustering_result.to_dict() if clustering_result else {}
+            ),
         }
