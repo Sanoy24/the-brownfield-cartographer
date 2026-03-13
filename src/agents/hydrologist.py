@@ -17,7 +17,7 @@ from typing import Any
 import networkx as nx
 
 from src.analyzers.dag_config_parser import parse_airflow_dag, parse_dbt_project
-from src.analyzers.sql_lineage import analyze_sql_file
+from src.analyzers.sql_lineage import analyze_sql_file, analyze_sql_string
 from src.graph.knowledge_graph import KnowledgeGraph
 from src.models.schemas import (
     DatasetNode,
@@ -57,13 +57,17 @@ SPARK_WRITE_PATTERNS = [
 ]
 
 SQLALCHEMY_PATTERNS = [
-    re.compile(r"""execute\(\s*['"]([^'"]*(?:SELECT|INSERT|UPDATE|DELETE)[^'"]*)['"]\s*""", re.IGNORECASE),
+    re.compile(
+        r"""execute\(\s*['"]([^'"]*(?:SELECT|INSERT|UPDATE|DELETE)[^'"]*)['"]\s*""",
+        re.IGNORECASE,
+    ),
 ]
 
 
 # ---------------------------------------------------------------------------
 # Python Data Flow Analyzer
 # ---------------------------------------------------------------------------
+
 
 def _analyze_python_data_flow(
     file_path: Path, repo_root: Path
@@ -101,6 +105,17 @@ def _analyze_python_data_flow(
     for pattern in SPARK_WRITE_PATTERNS:
         writes.extend(pattern.findall(source_text))
 
+    # Detect inline SQL executed via SQLAlchemy style calls
+    inline_sql_transforms: list[TransformationNode] = []
+    for pattern in SQLALCHEMY_PATTERNS:
+        for sql_text in pattern.findall(source_text):
+            inline_sql_transforms.extend(
+                analyze_sql_string(
+                    sql_text,
+                    source_file=relative_path,
+                )
+            )
+
     # If we found any data I/O, create a transformation node
     if reads or writes:
         transformations.append(
@@ -112,6 +127,7 @@ def _analyze_python_data_flow(
                 line_range=(1, len(source_text.split("\n"))),
             )
         )
+    transformations.extend(inline_sql_transforms)
 
     return transformations
 
@@ -119,6 +135,7 @@ def _analyze_python_data_flow(
 # ---------------------------------------------------------------------------
 # Hydrologist Agent — Public API
 # ---------------------------------------------------------------------------
+
 
 class Hydrologist:
     """
@@ -167,8 +184,8 @@ class Hydrologist:
             return self._run_incremental(repo_root, knowledge_graph, changed_files)
 
         logger.info("Hydrologist: analyzing data flows in %s", repo_root)
-        all_transformations, all_datasets, sql_count, py_count = self._collect_lineage_full(
-            repo_root, knowledge_graph
+        all_transformations, all_datasets, sql_count, py_count = (
+            self._collect_lineage_full(repo_root, knowledge_graph)
         )
 
         for dataset in all_datasets:
@@ -192,7 +209,9 @@ class Hydrologist:
         }
         logger.info(
             "Hydrologist complete: %d transformations, %d sources, %d sinks",
-            len(all_transformations), len(sources), len(sinks),
+            len(all_transformations),
+            len(sources),
+            len(sinks),
         )
         return summary
 
@@ -213,16 +232,24 @@ class Hydrologist:
                 knowledge_graph.add_configures_edge(edge.source, edge.target)
 
         sql_files = [
-            f for f in repo_root.rglob("*.sql")
-            if not any(skip in f.parts for skip in {".git", "node_modules", "__pycache__", ".venv"})
+            f
+            for f in repo_root.rglob("*.sql")
+            if not any(
+                skip in f.parts
+                for skip in {".git", "node_modules", "__pycache__", ".venv"}
+            )
         ]
         for sql_file in sql_files:
             all_transformations.extend(analyze_sql_file(sql_file, repo_root))
         logger.info("Analyzed %d SQL files", len(sql_files))
 
         py_files = [
-            f for f in repo_root.rglob("*.py")
-            if not any(skip in f.parts for skip in {".git", "node_modules", "__pycache__", ".venv"})
+            f
+            for f in repo_root.rglob("*.py")
+            if not any(
+                skip in f.parts
+                for skip in {".git", "node_modules", "__pycache__", ".venv"}
+            )
         ]
         for py_file in py_files:
             all_transformations.extend(_analyze_python_data_flow(py_file, repo_root))
@@ -241,7 +268,9 @@ class Hydrologist:
         changed_files: set[str],
     ) -> dict[str, Any]:
         """Re-analyze lineage only for changed files and merge into the graph."""
-        logger.info("Hydrologist: incremental update for %d changed files", len(changed_files))
+        logger.info(
+            "Hydrologist: incremental update for %d changed files", len(changed_files)
+        )
         knowledge_graph.remove_transformation_nodes_for_files(changed_files)
 
         all_transformations: list[TransformationNode] = []
@@ -262,7 +291,9 @@ class Hydrologist:
                 if "dags" in path.parts:
                     all_transformations.extend(parse_airflow_dag(path, repo_root))
                 else:
-                    all_transformations.extend(_analyze_python_data_flow(path, repo_root))
+                    all_transformations.extend(
+                        _analyze_python_data_flow(path, repo_root)
+                    )
                 py_count += 1
 
         for dataset in all_datasets:
@@ -286,7 +317,9 @@ class Hydrologist:
         }
         logger.info(
             "Hydrologist incremental complete: %d new transformations, %d sources, %d sinks",
-            len(all_transformations), len(sources), len(sinks),
+            len(all_transformations),
+            len(sources),
+            len(sinks),
         )
         return summary
 
@@ -295,9 +328,7 @@ class Hydrologist:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def blast_radius(
-        knowledge_graph: KnowledgeGraph, node_name: str
-    ) -> list[str]:
+    def blast_radius(knowledge_graph: KnowledgeGraph, node_name: str) -> list[str]:
         """
         Find all downstream dependents of a given node.
 
@@ -352,7 +383,8 @@ class Hydrologist:
     def _find_sources(graph: nx.DiGraph) -> set[str]:
         """Nodes with in-degree 0 (data enters here)."""
         return {
-            node for node in graph.nodes()
+            node
+            for node in graph.nodes()
             if graph.in_degree(node) == 0
             and graph.nodes[node].get("node_type") == "dataset"
         }
@@ -361,15 +393,14 @@ class Hydrologist:
     def _find_sinks(graph: nx.DiGraph) -> set[str]:
         """Nodes with out-degree 0 (data leaves here)."""
         return {
-            node for node in graph.nodes()
+            node
+            for node in graph.nodes()
             if graph.out_degree(node) == 0
             and graph.nodes[node].get("node_type") == "dataset"
         }
 
     @staticmethod
-    def trace_upstream(
-        knowledge_graph: KnowledgeGraph, dataset_name: str
-    ) -> list[str]:
+    def trace_upstream(knowledge_graph: KnowledgeGraph, dataset_name: str) -> list[str]:
         """
         Trace all upstream sources that feed into a given dataset.
 
@@ -392,6 +423,7 @@ class Hydrologist:
 
         # Filter to only dataset nodes (exclude transformation nodes)
         return sorted(
-            node for node in visited
+            node
+            for node in visited
             if knowledge_graph.graph.nodes[node].get("node_type") == "dataset"
         )
