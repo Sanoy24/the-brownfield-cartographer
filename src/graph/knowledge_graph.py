@@ -16,12 +16,7 @@ from typing import Any, Optional
 import networkx as nx
 from networkx.readwrite import json_graph
 
-from src.models.schemas import (
-    DatasetNode,
-    FunctionNode,
-    ModuleNode,
-    TransformationNode,
-)
+from src.models.schemas import DatasetNode, FunctionNode, ModuleNode, TransformationNode
 
 logger = logging.getLogger(__name__)
 
@@ -96,23 +91,21 @@ class KnowledgeGraph:
             node_type="transformation",
             transformation_type=transformation.transformation_type.value,
             source_file=transformation.source_file,
+            line_start=transformation.line_range[0],
+            line_end=transformation.line_range[1],
         )
 
         # Create CONSUMES edges (source datasets → transformation)
         for src_dataset in transformation.source_datasets:
             if src_dataset not in self.graph:
                 self.graph.add_node(src_dataset, node_type="dataset")
-            self.graph.add_edge(
-                src_dataset, tx_id, edge_type="CONSUMES"
-            )
+            self.graph.add_edge(src_dataset, tx_id, edge_type="CONSUMES")
 
         # Create PRODUCES edges (transformation → target datasets)
         for tgt_dataset in transformation.target_datasets:
             if tgt_dataset not in self.graph:
                 self.graph.add_node(tgt_dataset, node_type="dataset")
-            self.graph.add_edge(
-                tx_id, tgt_dataset, edge_type="PRODUCES"
-            )
+            self.graph.add_edge(tx_id, tgt_dataset, edge_type="PRODUCES")
 
     # ------------------------------------------------------------------
     # Edge insertion
@@ -135,9 +128,7 @@ class KnowledgeGraph:
 
     def add_configures_edge(self, config_file: str, target: str) -> None:
         """Record that a config file configures a module or pipeline."""
-        self.graph.add_edge(
-            config_file, target, edge_type="CONFIGURES"
-        )
+        self.graph.add_edge(config_file, target, edge_type="CONFIGURES")
 
     # ------------------------------------------------------------------
     # Node/edge removal (for incremental updates)
@@ -161,7 +152,8 @@ class KnowledgeGraph:
     def remove_import_edges_for_module(self, path: str) -> None:
         """Remove all IMPORTS edges where path is source or target."""
         to_remove = [
-            (u, v) for u, v, d in self.graph.edges(data=True)
+            (u, v)
+            for u, v, d in self.graph.edges(data=True)
             if d.get("edge_type") == "IMPORTS" and (u == path or v == path)
         ]
         self.graph.remove_edges_from(to_remove)
@@ -169,8 +161,10 @@ class KnowledgeGraph:
     def remove_function_nodes_for_module(self, module_path: str) -> None:
         """Remove all function nodes whose parent_module is the given path."""
         to_remove = [
-            n for n, d in self.graph.nodes(data=True)
-            if d.get("node_type") == "function" and d.get("parent_module") == module_path
+            n
+            for n, d in self.graph.nodes(data=True)
+            if d.get("node_type") == "function"
+            and d.get("parent_module") == module_path
         ]
         for n in to_remove:
             self.graph.remove_node(n)
@@ -179,14 +173,15 @@ class KnowledgeGraph:
     def remove_transformation_nodes_for_files(self, file_paths: set[str]) -> None:
         """Remove all transformation nodes whose source_file is in file_paths (and their edges)."""
         to_remove = [
-            n for n, d in self.graph.nodes(data=True)
-            if d.get("node_type") == "transformation" and d.get("source_file") in file_paths
+            n
+            for n, d in self.graph.nodes(data=True)
+            if d.get("node_type") == "transformation"
+            and d.get("source_file") in file_paths
         ]
         for n in to_remove:
             self.graph.remove_node(n)
         self._transformation_nodes = [
-            t for t in self._transformation_nodes
-            if t.source_file not in file_paths
+            t for t in self._transformation_nodes if t.source_file not in file_paths
         ]
 
     def load_from_artifacts_replace(self, cartography_dir: Path) -> None:
@@ -217,20 +212,22 @@ class KnowledgeGraph:
     def get_module_subgraph(self) -> nx.DiGraph:
         """Return a subgraph containing only module nodes and IMPORTS edges."""
         module_nodes = [
-            n for n, d in self.graph.nodes(data=True)
-            if d.get("node_type") == "module"
+            n for n, d in self.graph.nodes(data=True) if d.get("node_type") == "module"
         ]
         return self.graph.subgraph(module_nodes).copy()
 
     def get_lineage_subgraph(self) -> nx.DiGraph:
         """Return a subgraph containing dataset and transformation nodes."""
         lineage_nodes = [
-            n for n, d in self.graph.nodes(data=True)
+            n
+            for n, d in self.graph.nodes(data=True)
             if d.get("node_type") in ("dataset", "transformation")
         ]
         return self.graph.subgraph(lineage_nodes).copy()
 
-    def compute_pagerank(self, subgraph: Optional[nx.DiGraph] = None) -> dict[str, float]:
+    def compute_pagerank(
+        self, subgraph: Optional[nx.DiGraph] = None
+    ) -> dict[str, float]:
         """Compute PageRank scores to identify architectural hubs."""
         g = subgraph if subgraph is not None else self.graph
         if len(g) == 0:
@@ -238,10 +235,14 @@ class KnowledgeGraph:
         try:
             return nx.pagerank(g)
         except nx.NetworkXException:
-            logger.warning("PageRank failed (likely disconnected graph), using degree centrality")
+            logger.warning(
+                "PageRank failed (likely disconnected graph), using degree centrality"
+            )
             return nx.degree_centrality(g)
 
-    def find_circular_dependencies(self, subgraph: Optional[nx.DiGraph] = None) -> list[list[str]]:
+    def find_circular_dependencies(
+        self, subgraph: Optional[nx.DiGraph] = None
+    ) -> list[list[str]]:
         """Detect strongly connected components (circular dependencies)."""
         g = subgraph if subgraph is not None else self.graph
         cycles = [
@@ -396,7 +397,8 @@ class KnowledgeGraph:
     def summary(self) -> dict[str, Any]:
         """Return a quick summary of graph contents."""
         transformation_count = sum(
-            1 for _, d in self.graph.nodes(data=True)
+            1
+            for _, d in self.graph.nodes(data=True)
             if d.get("node_type") == "transformation"
         )
         return {
