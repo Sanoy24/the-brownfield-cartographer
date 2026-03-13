@@ -15,6 +15,7 @@ import typer
 from dotenv import load_dotenv
 from rich.console import Console
 from rich.logging import RichHandler
+from rich.prompt import Prompt
 
 from src.orchestrator import Orchestrator
 
@@ -137,23 +138,61 @@ def query(
     from src.agents.navigator import run_interactive
     from src.graph.knowledge_graph import KnowledgeGraph
 
-    cartography_dir = Path(path).resolve() / ".cartography"
+    base_path = Path(path).resolve()
+    cartography_dir = base_path / ".cartography"
+    
     if not cartography_dir.exists():
-        console.print(
-            f"[bold red]Error:[/bold red] No .cartography/ directory found at {cartography_dir}\n"
-            f"[dim]Run `cartographer analyze <repo>` first to generate artifacts.[/dim]"
-        )
-        raise typer.Exit(code=1)
+        # Maybe the path provided IS the artifact directory?
+        if (base_path / "module_graph.json").exists():
+            cartography_dir = base_path
+        else:
+            console.print(
+                f"[bold red]Error:[/bold red] No .cartography/ directory found at {base_path}\n"
+                f"[dim]Run `cartographer analyze <repo>` first to generate artifacts.[/dim]"
+            )
+            raise typer.Exit(code=1)
 
-    console.print(f"Loading knowledge graph from {cartography_dir}…")
-    kg = KnowledgeGraph.from_artifacts(cartography_dir)
+    # Multi-repo support: check for subdirectories (repo folders)
+    repos = [d for d in cartography_dir.iterdir() if d.is_dir() and (d / "module_graph.json").exists()]
+    
+    target_dir = cartography_dir
+    if repos:
+        if len(repos) == 1:
+            target_dir = repos[0]
+            console.print(f"Selecting only repo found: [bold]{target_dir.name}[/bold]")
+        else:
+            console.print("\n[bold]Select a repository to query:[/bold]")
+            for i, repo_dir in enumerate(repos, 1):
+                console.print(f"  {i}. [cyan]{repo_dir.name}[/cyan]")
+            
+            choice = Prompt.ask(
+                "\nEnter number",
+                choices=[str(i) for i in range(1, len(repos) + 1)],
+                default="1"
+            )
+            target_dir = repos[int(choice) - 1]
+
+    console.print(f"Loading knowledge graph from [bold cyan]{target_dir}[/bold cyan]…")
+    
+    try:
+        kg = KnowledgeGraph.from_artifacts(target_dir)
+    except Exception as exc:
+        console.print(f"[bold red]Failed to load graph:[/bold red] {exc}")
+        raise typer.Exit(code=1)
+        
     summary = kg.summary()
-    console.print(
-        f"  Loaded: {summary['modules']} modules, "
-        f"{summary['datasets']} datasets, "
-        f"{summary['total_nodes']} nodes, "
-        f"{summary['total_edges']} edges"
-    )
+    if summary['total_nodes'] == 0:
+        console.print(
+            "[bold yellow]Warning:[/bold yellow] Loaded graph is empty. "
+            "The analysis might have failed or found no source files."
+        )
+    else:
+        console.print(
+            f"  Loaded: {summary['modules']} modules, "
+            f"{summary['datasets']} datasets, "
+            f"{summary['total_nodes']} nodes, "
+            f"{summary['total_edges']} edges"
+        )
 
     run_interactive(kg)
 
