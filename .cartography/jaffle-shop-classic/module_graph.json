@@ -1,0 +1,112 @@
+{
+  "directed": true,
+  "multigraph": false,
+  "graph": {},
+  "nodes": [
+    {
+      "node_type": "module",
+      "language": "sql",
+      "lines_of_code": 70,
+      "complexity_score": 0.0,
+      "change_velocity_30d": 0,
+      "is_dead_code_candidate": false,
+      "public_functions": [],
+      "classes": [],
+      "purpose_statement": "This module creates a comprehensive customer profile by aggregating order history and payment data to calculate key performance indicators such as customer lifetime value and order frequency. It provides a consolidated view of customer engagement and financial contribution to support business intelligence and customer analysis.",
+      "domain_cluster": "customer_order",
+      "id": "models/customers.sql"
+    },
+    {
+      "node_type": "module",
+      "language": "sql",
+      "lines_of_code": 26,
+      "complexity_score": 0.0,
+      "change_velocity_30d": 0,
+      "is_dead_code_candidate": false,
+      "public_functions": [],
+      "classes": [],
+      "purpose_statement": "This module cleans and standardizes raw payment transaction data to create a reliable foundation for downstream reporting. It performs essential data preparation tasks such as field renaming and currency normalization to ensure data consistency. The resulting dataset enables accurate analysis of payment methods and sales revenue.",
+      "domain_cluster": "data_payment",
+      "id": "models/staging/stg_payments.sql"
+    },
+    {
+      "node_type": "module",
+      "language": "sql",
+      "lines_of_code": 23,
+      "complexity_score": 0.0,
+      "change_velocity_30d": 0,
+      "is_dead_code_candidate": false,
+      "public_functions": [],
+      "classes": [],
+      "purpose_statement": "This module cleanses and standardizes raw customer data to create a consistent staging layer for downstream analytics. It transforms source system identifiers into a readable format while selecting core customer attributes. This ensures that all subsequent transformations operate on a validated and uniformly named dataset.",
+      "domain_cluster": "customer_analytics transforms",
+      "id": "models/staging/stg_customers.sql"
+    },
+    {
+      "node_type": "module",
+      "language": "sql",
+      "lines_of_code": 57,
+      "complexity_score": 0.0,
+      "change_velocity_30d": 0,
+      "is_dead_code_candidate": false,
+      "public_functions": [],
+      "classes": [],
+      "purpose_statement": "This module provides a comprehensive view of customer orders by combining order status details with a breakdown of payment amounts by method. It aggregates financial transactions to calculate the specific contribution of credit cards, coupons, bank transfers, and gift cards toward each order's total value.",
+      "domain_cluster": "customer_order",
+      "id": "models/orders.sql"
+    },
+    {
+      "node_type": "module",
+      "language": "yaml",
+      "lines_of_code": 83,
+      "complexity_score": 0.0,
+      "change_velocity_30d": 0,
+      "is_dead_code_candidate": false,
+      "public_functions": [],
+      "classes": [],
+      "purpose_statement": "This module defines the structural metadata and data quality constraints for core e-commerce entities, specifically customers and orders. It ensures the integrity of customer profiles and transaction history by enforcing rules for uniqueness, mandatory fields, and valid status values. By documenting critical business metrics and payment breakdowns, it supports reliable financial reporting and customer analysis.",
+      "domain_cluster": "entities specifically_customers",
+      "id": "models/schema.yml"
+    },
+    {
+      "node_type": "module",
+      "language": "yaml",
+      "lines_of_code": 27,
+      "complexity_score": 0.0,
+      "change_velocity_30d": 0,
+      "is_dead_code_candidate": false,
+      "public_functions": [],
+      "classes": [],
+      "purpose_statement": "This module acts as the central configuration for the Jaffle Shop analytics project, defining the scope and structure for data transformation workflows. It establishes project-wide standards, such as version requirements and directory paths, to ensure consistent execution of the analytics pipeline. Additionally, it sets default materialization strategies to control how raw data is persisted into tables and views for business reporting.",
+      "domain_cluster": "project_analytics",
+      "id": "dbt_project.yml"
+    },
+    {
+      "node_type": "module",
+      "language": "sql",
+      "lines_of_code": 24,
+      "complexity_score": 0.0,
+      "change_velocity_30d": 0,
+      "is_dead_code_candidate": false,
+      "public_functions": [],
+      "classes": [],
+      "purpose_statement": "This module prepares raw order data for downstream analytics by creating a clean, standardized view of transactional records. It serves as a foundational staging layer, renaming technical identifiers to business-friendly terms and ensuring consistency for further transformation.",
+      "domain_cluster": "records serves_records",
+      "id": "models/staging/stg_orders.sql"
+    },
+    {
+      "node_type": "module",
+      "language": "yaml",
+      "lines_of_code": 32,
+      "complexity_score": 0.0,
+      "change_velocity_30d": 0,
+      "is_dead_code_candidate": false,
+      "public_functions": [],
+      "classes": [],
+      "purpose_statement": "This module enforces data quality and integrity constraints for core e-commerce entities, specifically customers, orders, and payments. It guarantees the reliability of unique identifiers and validates that transaction statuses and payment methods conform to approved business definitions.",
+      "domain_cluster": "entities specifically_customers",
+      "id": "models/staging/schema.yml"
+    }
+  ],
+  "edges": []
+}

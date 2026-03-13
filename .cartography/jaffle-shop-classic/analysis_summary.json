@@ -1,0 +1,96 @@
+{
+  "surveyor": {
+    "total_files_scanned": 8,
+    "modules_parsed": 8,
+    "top_architectural_hubs": [
+      {
+        "path": "dbt_project.yml",
+        "pagerank": 0.125
+      },
+      {
+        "path": "models/customers.sql",
+        "pagerank": 0.125
+      },
+      {
+        "path": "models/orders.sql",
+        "pagerank": 0.125
+      },
+      {
+        "path": "models/schema.yml",
+        "pagerank": 0.125
+      },
+      {
+        "path": "models/staging/schema.yml",
+        "pagerank": 0.125
+      },
+      {
+        "path": "models/staging/stg_customers.sql",
+        "pagerank": 0.125
+      },
+      {
+        "path": "models/staging/stg_orders.sql",
+        "pagerank": 0.125
+      },
+      {
+        "path": "models/staging/stg_payments.sql",
+        "pagerank": 0.125
+      }
+    ],
+    "circular_dependencies": [],
+    "dead_code_candidates": [],
+    "high_velocity_files": []
+  },
+  "hydrologist": {
+    "total_transformations": 5,
+    "total_datasets": 5,
+    "sql_files_analyzed": 5,
+    "python_files_scanned": 0,
+    "data_sources": [
+      "raw_customers",
+      "raw_orders",
+      "raw_payments"
+    ],
+    "data_sinks": [
+      "customers",
+      "orders"
+    ],
+    "lineage_nodes": 13,
+    "lineage_edges": 13
+  },
+  "semanticist": {
+    "purpose_statements": {
+      "dbt_project.yml": "This module acts as the central configuration for the Jaffle Shop analytics project, defining the scope and structure for data transformation workflows. It establishes project-wide standards, such as version requirements and directory paths, to ensure consistent execution of the analytics pipeline. Additionally, it sets default materialization strategies to control how raw data is persisted into tables and views for business reporting.",
+      "models/customers.sql": "This module creates a comprehensive customer profile by aggregating order history and payment data to calculate key performance indicators such as customer lifetime value and order frequency. It provides a consolidated view of customer engagement and financial contribution to support business intelligence and customer analysis.",
+      "models/orders.sql": "This module provides a comprehensive view of customer orders by combining order status details with a breakdown of payment amounts by method. It aggregates financial transactions to calculate the specific contribution of credit cards, coupons, bank transfers, and gift cards toward each order's total value.",
+      "models/schema.yml": "This module defines the structural metadata and data quality constraints for core e-commerce entities, specifically customers and orders. It ensures the integrity of customer profiles and transaction history by enforcing rules for uniqueness, mandatory fields, and valid status values. By documenting critical business metrics and payment breakdowns, it supports reliable financial reporting and customer analysis.",
+      "models/staging/schema.yml": "This module enforces data quality and integrity constraints for core e-commerce entities, specifically customers, orders, and payments. It guarantees the reliability of unique identifiers and validates that transaction statuses and payment methods conform to approved business definitions.",
+      "models/staging/stg_customers.sql": "This module cleanses and standardizes raw customer data to create a consistent staging layer for downstream analytics. It transforms source system identifiers into a readable format while selecting core customer attributes. This ensures that all subsequent transformations operate on a validated and uniformly named dataset.",
+      "models/staging/stg_orders.sql": "This module prepares raw order data for downstream analytics by creating a clean, standardized view of transactional records. It serves as a foundational staging layer, renaming technical identifiers to business-friendly terms and ensuring consistency for further transformation.",
+      "models/staging/stg_payments.sql": "This module cleans and standardizes raw payment transaction data to create a reliable foundation for downstream reporting. It performs essential data preparation tasks such as field renaming and currency normalization to ensure data consistency. The resulting dataset enables accurate analysis of payment methods and sales revenue."
+    },
+    "doc_drift_flags": {},
+    "domain_clusters": {
+      "dbt_project.yml": "project_analytics",
+      "models/customers.sql": "customer_order",
+      "models/orders.sql": "customer_order",
+      "models/schema.yml": "entities specifically_customers",
+      "models/staging/schema.yml": "entities specifically_customers",
+      "models/staging/stg_customers.sql": "customer_analytics transforms",
+      "models/staging/stg_orders.sql": "records serves_records",
+      "models/staging/stg_payments.sql": "data_payment"
+    },
+    "day_one_answers": {
+      "q1": "The primary data ingestion path flows from three raw sources (raw_customers, raw_orders, raw_payments) into corresponding staging models located in the 'models/staging' directory. These staging modules perform initial cleansing and standardization before passing data downstream. Evidence: models/staging/stg_customers.sql, models/staging/stg_orders.sql, models/staging/stg_payments.sql.",
+      "q2": "The most critical output datasets are the 'customers' and 'orders' models, which are identified as the project's only data sinks. These models contain the final aggregated business logic and KPIs intended for end-user consumption. Evidence: models/customers.sql, models/orders.sql.",
+      "q3": "If 'models/staging/stg_payments.sql' fails, the blast radius would extend to both downstream models, 'orders' and 'customers', breaking the entire pipeline. This single point of failure in the payments data flow would sever critical financial reporting and customer lifetime value calculations. Evidence: models/staging/stg_payments.sql, models/orders.sql, models/customers.sql.",
+      "q4": "Business logic is concentrated in the 'customers.sql' and 'orders.sql' models, which handle complex aggregations like customer lifetime value and payment method breakdowns. In contrast, the logic in the 'staging' directory is distributed and limited to simple data cleansing and standardization tasks. Evidence: models/customers.sql, models/orders.sql, models/staging/stg_customers.sql.",
+      "q5": "There have been no high-velocity changes in the last 90 days, as the surveyor analysis explicitly returns an empty list for 'high_velocity_files'. This indicates a stable codebase with no recent active development hotspots or frequent refactoring. Evidence: surveyor -> high_velocity_files."
+    },
+    "llm_provider": "ollama",
+    "token_budget": {
+      "used": 4686,
+      "max": 500000,
+      "calls": 9
+    }
+  }
+}
