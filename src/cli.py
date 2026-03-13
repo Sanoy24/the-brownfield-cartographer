@@ -3,6 +3,7 @@ CLI entry point for The Brownfield Cartographer.
 
 Provides the `cartographer` commands:
   - analyze: Ingest a local or remote repo and generate cartography artifacts
+  - query:   Interactively query a previously analyzed codebase
 """
 
 from __future__ import annotations
@@ -11,10 +12,14 @@ import logging
 from pathlib import Path
 
 import typer
+from dotenv import load_dotenv
 from rich.console import Console
 from rich.logging import RichHandler
 
 from src.orchestrator import Orchestrator
+
+# Load environment variables from .env file
+load_dotenv()
 
 console = Console()
 
@@ -57,7 +62,7 @@ def analyze(
     repo: str = typer.Argument(
         help="Local path or GitHub URL (e.g. https://github.com/dbt-labs/jaffle_shop)"
     ),
-    output: str = typer.Option(
+    output: str | None = typer.Option(
         None,
         "--output", "-o",
         help="Output directory for .cartography/ artifacts (defaults to cwd for URLs, repo root for local)",
@@ -71,11 +76,15 @@ def analyze(
     """
     Analyze a codebase and generate cartography artifacts.
 
-    Runs the Surveyor (static structure) and Hydrologist (data lineage)
-    agents on any codebase containing Python, SQL, and/or YAML files.
+    Runs the full four-agent pipeline:
+      Surveyor (static structure) → Hydrologist (data lineage) →
+      Semanticist (LLM analysis) → Archivist (living context)
 
     Supports any project with Python, SQL, YAML, or mixed stacks — including
     dbt projects, Airflow DAGs, Django/Flask/FastAPI apps, data pipelines, etc.
+
+    Set one of these env vars for LLM-powered analysis:
+      OPENAI_API_KEY, GEMINI_API_KEY, OPENROUTER_API_KEY, OLLAMA_BASE_URL
     """
     _setup_logging(verbose)
 
@@ -92,6 +101,61 @@ def analyze(
         raise typer.Exit(code=1)
     finally:
         orchestrator.cleanup()
+
+
+@app.command()
+def query(
+    path: str = typer.Argument(
+        ".",
+        help="Path to a directory containing .cartography/ artifacts (default: current directory)",
+    ),
+    verbose: bool = typer.Option(
+        False,
+        "--verbose", "-v",
+        help="Enable debug logging",
+    ),
+) -> None:
+    """
+    Interactively query a previously analyzed codebase.
+
+    Opens the Navigator — an interactive REPL for exploring the
+    knowledge graph with both direct commands and natural language queries.
+
+    Commands:
+      find <concept>        — Search for implementations
+      lineage <dataset>     — Trace upstream data lineage
+      lineage-down <dataset>— Trace downstream lineage
+      blast <module>        — Show blast radius
+      explain <path>        — Explain a module
+      summary               — Show graph summary
+
+    Requires .cartography/ artifacts from a prior `analyze` run.
+    Set an LLM env var (OPENAI_API_KEY, etc.) for natural language queries.
+    """
+    _setup_logging(verbose)
+
+    from src.agents.navigator import run_interactive
+    from src.graph.knowledge_graph import KnowledgeGraph
+
+    cartography_dir = Path(path).resolve() / ".cartography"
+    if not cartography_dir.exists():
+        console.print(
+            f"[bold red]Error:[/bold red] No .cartography/ directory found at {cartography_dir}\n"
+            f"[dim]Run `cartographer analyze <repo>` first to generate artifacts.[/dim]"
+        )
+        raise typer.Exit(code=1)
+
+    console.print(f"Loading knowledge graph from {cartography_dir}…")
+    kg = KnowledgeGraph.from_artifacts(cartography_dir)
+    summary = kg.summary()
+    console.print(
+        f"  Loaded: {summary['modules']} modules, "
+        f"{summary['datasets']} datasets, "
+        f"{summary['total_nodes']} nodes, "
+        f"{summary['total_edges']} edges"
+    )
+
+    run_interactive(kg)
 
 
 def main() -> None:
