@@ -9,6 +9,7 @@ and dead code candidate identification.
 
 from __future__ import annotations
 
+import json
 import logging
 import subprocess
 from collections import Counter
@@ -182,11 +183,12 @@ class Surveyor:
         self,
         repo_root: Path,
         knowledge_graph: KnowledgeGraph,
+        changed_files: set[str] | None = None,
     ) -> dict[str, Any]:
         """
-        Execute full structural analysis on the given repository.
+        Execute full or incremental structural analysis on the given repository.
 
-        Steps:
+        Steps (full run):
           1. Scan all source files
           2. Parse each file with tree-sitter (extract imports, functions, classes)
           3. Compute git change velocity
@@ -195,20 +197,34 @@ class Surveyor:
           6. Detect circular dependencies (strongly connected components)
           7. Flag dead code candidates
 
+        When changed_files is provided (incremental): re-analyze only those files,
+        remove modules for deleted files, merge updates into the existing graph,
+        then recompute velocity, dead code, PageRank, and cycles.
+
         Args:
             repo_root: Absolute path to the repository root.
-            knowledge_graph: Shared KnowledgeGraph to populate.
+            knowledge_graph: Shared KnowledgeGraph to populate or update.
+            changed_files: If set, only these paths (relative to repo_root) are
+                re-analyzed; modules for deleted paths are removed.
 
         Returns:
             Dict with analysis summary and key metrics.
         """
-        logger.info("Surveyor: scanning %s", repo_root)
-
-        # Step 1: Collect source files
         source_files = _collect_source_files(repo_root)
+        path_map = {
+            str(f.relative_to(repo_root)).replace("\\", "/"): f
+            for f in source_files
+        }
+
+        if changed_files is not None:
+            return self._run_incremental(
+                repo_root, knowledge_graph, source_files, path_map, changed_files
+            )
+
+        logger.info("Surveyor: scanning %s", repo_root)
         logger.info("Found %d source files", len(source_files))
 
-        # Step 2: Parse each file
+        # Full run: parse all files
         modules: dict[str, ModuleNode] = {}
         for file_path in source_files:
             module = analyze_module(file_path, repo_root)
@@ -217,48 +233,117 @@ class Surveyor:
 
         logger.info("Parsed %d modules successfully", len(modules))
 
-        # Step 3: Git velocity
         velocity = extract_git_velocity(repo_root)
         for path, commits in velocity.items():
             if path in modules:
                 modules[path].change_velocity_30d = commits
 
-        # Step 4: Detect dead code candidates
         dead_code = _detect_dead_code(modules)
         for path in dead_code:
             if path in modules:
                 modules[path].is_dead_code_candidate = True
 
-        # Step 5: Register modules and build import graph
         for module in modules.values():
             knowledge_graph.add_module_node(module)
 
-        # Build import edges between modules
         all_module_paths = set(modules.keys())
         for module in modules.values():
             for imp in module.imports:
-                # Try to resolve import to a known module file
                 target = _resolve_import(imp, all_module_paths)
                 if target and target != module.path:
                     knowledge_graph.add_import_edge(module.path, target)
 
-        # Step 6: Extract functions for richer analysis
         for file_path in source_files:
             functions = extract_functions_from_file(file_path, repo_root)
             for fn in functions:
                 knowledge_graph.add_function_node(fn)
 
-        # Step 7: Compute structural metrics
+        return self._build_summary(
+            knowledge_graph, source_files, modules, dead_code, velocity
+        )
+
+    def _run_incremental(
+        self,
+        repo_root: Path,
+        knowledge_graph: KnowledgeGraph,
+        source_files: list[Path],
+        path_map: dict[str, Path],
+        changed_files: set[str],
+    ) -> dict[str, Any]:
+        """Re-analyze only changed files and merge into the existing graph."""
+        logger.info("Surveyor: incremental update for %d changed files", len(changed_files))
+        changed_set = set(changed_files)
+
+        # Remove modules and functions for deleted files
+        for rel_path in changed_set:
+            if rel_path not in path_map:
+                knowledge_graph.remove_import_edges_for_module(rel_path)
+                knowledge_graph.remove_function_nodes_for_module(rel_path)
+                knowledge_graph.remove_module_node(rel_path)
+
+        # Re-analyze changed files that still exist
+        updated_paths = changed_set & path_map.keys()
+        for rel_path in sorted(updated_paths):
+            file_path = path_map[rel_path]
+            module = analyze_module(file_path, repo_root)
+            if not module:
+                continue
+            knowledge_graph.remove_import_edges_for_module(rel_path)
+            knowledge_graph.add_module_node(module)
+
+        all_module_paths = set(knowledge_graph._module_nodes.keys())
+        for rel_path in updated_paths:
+            if rel_path not in knowledge_graph._module_nodes:
+                continue
+            module = knowledge_graph._module_nodes[rel_path]
+            for imp in module.imports:
+                target = _resolve_import(imp, all_module_paths)
+                if target and target != module.path:
+                    knowledge_graph.add_import_edge(module.path, target)
+
+        # Recompute git velocity for all modules
+        velocity = extract_git_velocity(repo_root)
+        for path, commits in velocity.items():
+            if path in knowledge_graph._module_nodes:
+                knowledge_graph._module_nodes[path].change_velocity_30d = commits
+                if knowledge_graph.graph.has_node(path):
+                    knowledge_graph.graph.nodes[path]["change_velocity_30d"] = commits
+
+        # Re-detect dead code on full module set
+        dead_code = _detect_dead_code(dict(knowledge_graph._module_nodes))
+        for path in knowledge_graph._module_nodes:
+            knowledge_graph._module_nodes[path].is_dead_code_candidate = path in dead_code
+            if knowledge_graph.graph.has_node(path):
+                knowledge_graph.graph.nodes[path]["is_dead_code_candidate"] = path in dead_code
+
+        # Update function nodes for changed modules only
+        for rel_path in updated_paths:
+            knowledge_graph.remove_function_nodes_for_module(rel_path)
+            file_path = path_map[rel_path]
+            functions = extract_functions_from_file(file_path, repo_root)
+            for fn in functions:
+                knowledge_graph.add_function_node(fn)
+
+        modules = dict(knowledge_graph._module_nodes)
+        return self._build_summary(
+            knowledge_graph, source_files, modules, dead_code, velocity
+        )
+
+    def _build_summary(
+        self,
+        knowledge_graph: KnowledgeGraph,
+        source_files: list[Path],
+        modules: dict[str, ModuleNode],
+        dead_code: set[str],
+        velocity: dict[str, int],
+    ) -> dict[str, Any]:
+        """Build the standard Surveyor summary from current graph state."""
         module_subgraph = knowledge_graph.get_module_subgraph()
         pagerank = knowledge_graph.compute_pagerank(module_subgraph)
         cycles = knowledge_graph.find_circular_dependencies(module_subgraph)
-
-        # Sort by PageRank to find architectural hubs
         top_hubs = sorted(
             pagerank.items(), key=lambda x: x[1], reverse=True
         )[:10]
-
-        # High-velocity files (top 20%)
         velocity_sorted = sorted(
             velocity.items(), key=lambda x: x[1], reverse=True
         )
@@ -279,8 +364,10 @@ class Surveyor:
                 for path, count in high_velocity_files
             ],
         }
-
-        logger.info("Surveyor complete: %s", json.dumps(summary, indent=2) if len(str(summary)) < 2000 else f"{len(modules)} modules analyzed")
+        logger.info(
+            "Surveyor complete: %s",
+            json.dumps(summary, indent=2) if len(str(summary)) < 2000 else f"{len(modules)} modules analyzed",
+        )
         return summary
 
 
@@ -306,6 +393,3 @@ def _resolve_import(import_name: str, known_paths: set[str]) -> Optional[str]:
 
     return None
 
-
-# Need json for the logger call
-import json
