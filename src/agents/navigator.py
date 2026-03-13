@@ -133,7 +133,12 @@ def tool_trace_lineage(
     if not target_node:
         target_node = _fuzzy_find_node(knowledge_graph, dataset)
     if not target_node:
-        return [{"error": f"Node '{dataset}' not found in graph"}]
+        available = _list_available_nodes(knowledge_graph, "dataset", limit=10)
+        return [{
+            "error": f"Dataset '{dataset}' not found in graph",
+            "suggestion": "Try one of these known datasets" if available else "No datasets in graph",
+            "available_datasets": available,
+        }]
 
     visited: set[str] = set()
     lineage: list[dict[str, Any]] = []
@@ -209,7 +214,12 @@ def tool_blast_radius(
     # Fuzzy-find the node
     target_node = _fuzzy_find_node(knowledge_graph, module_path)
     if not target_node:
-        return [{"error": f"Node '{module_path}' not found in graph"}]
+        available = _list_available_nodes(knowledge_graph, "module", limit=10)
+        return [{
+            "error": f"Module '{module_path}' not found in graph",
+            "suggestion": "Try one of these known modules" if available else "No modules in graph",
+            "available_modules": available,
+        }]
 
     visited: set[str] = set()
     affected: list[dict[str, Any]] = []
@@ -272,7 +282,12 @@ def tool_explain_module(
     """
     target_node = _fuzzy_find_node(knowledge_graph, path, "module")
     if not target_node:
-        return {"error": f"Module '{path}' not found in graph"}
+        available = _list_available_nodes(knowledge_graph, "module", limit=10)
+        return {
+            "error": f"Module '{path}' not found in graph",
+            "suggestion": "Try one of these known modules" if available else "No modules in graph",
+            "available_modules": available,
+        }
 
     attrs = dict(knowledge_graph.graph.nodes.get(target_node, {}))
 
@@ -356,6 +371,20 @@ def _fuzzy_find_node(
         return candidates[0][0]
 
     return None
+
+
+def _list_available_nodes(
+    knowledge_graph: KnowledgeGraph,
+    node_type: str,
+    limit: int = 10,
+) -> list[str]:
+    """Return a sample of available node IDs of the given type for error suggestions."""
+    nodes = [
+        n for n, d in knowledge_graph.graph.nodes(data=True)
+        if d.get("node_type") == node_type
+    ]
+    nodes.sort(key=len)  # shorter names first for readability
+    return nodes[:limit]
 
 
 # ---------------------------------------------------------------------------
