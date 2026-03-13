@@ -72,6 +72,111 @@ class TraceLogger:
 
 
 # ---------------------------------------------------------------------------
+# CODEBASE.md Schema & Validation
+# ---------------------------------------------------------------------------
+
+# Document the CODEBASE.md schema so downstream AI agents can reliably
+# parse and consume the living context file.
+CODEBASE_MD_SCHEMA = {
+    "required_sections": [
+        {
+            "heading": "Architecture Overview",
+            "description": "Module/function/edge counts, dataset/transformation stats, circular dependency warnings.",
+            "populated_when": "Always — derived from KnowledgeGraph.summary().",
+        },
+        {
+            "heading": "Critical Path",
+            "description": "Top 10 modules ranked by PageRank score in a markdown table.",
+            "populated_when": "Surveyor has computed PageRank (top_architectural_hubs).",
+        },
+        {
+            "heading": "Data Sources & Sinks",
+            "description": "Two sub-lists: Sources (in-degree=0 datasets) and Sinks (out-degree=0 datasets).",
+            "populated_when": "Hydrologist has discovered data lineage.",
+        },
+        {
+            "heading": "Known Debt",
+            "description": "Sub-sections for Circular Dependencies, Dead Code Candidates, and Documentation Drift.",
+            "populated_when": "Any of: circular deps detected, dead code flagged, or doc drift found.",
+        },
+        {
+            "heading": "High-Velocity Files",
+            "description": "Markdown table of files with highest git commit count in last 30 days.",
+            "populated_when": "Git history is available (not a bare/shallow clone).",
+        },
+        {
+            "heading": "Module Purpose Index",
+            "description": "Grouped by domain cluster, each module listed with its LLM-generated purpose statement.",
+            "populated_when": "Semanticist has generated purpose statements (requires LLM).",
+        },
+    ],
+    "format": "GitHub-flavored Markdown with tables, code fences, and emoji indicators.",
+    "update_frequency": "Re-generated on every `cartographer analyze` run.",
+}
+
+
+def validate_codebase_md(content: str) -> dict[str, Any]:
+    """
+    Validate that a generated CODEBASE.md has all required sections populated.
+
+    Returns a dict with:
+      - valid: bool — True if all critical sections have content
+      - sections: dict mapping section name → {present: bool, populated: bool}
+      - warnings: list of human-readable issues
+    """
+    section_headings = [
+        "Architecture Overview",
+        "Critical Path",
+        "Data Sources & Sinks",
+        "Known Debt",
+        "High-Velocity Files",
+        "Module Purpose Index",
+    ]
+
+    results: dict[str, dict[str, bool]] = {}
+    warnings: list[str] = []
+    lines = content.split("\n")
+
+    for heading in section_headings:
+        # Find the section header
+        header_idx = None
+        for i, line in enumerate(lines):
+            if heading.lower() in line.lower() and line.strip().startswith("#"):
+                header_idx = i
+                break
+
+        if header_idx is None:
+            results[heading] = {"present": False, "populated": False}
+            warnings.append(f"Missing section: '{heading}'")
+            continue
+
+        # Check if the section has content (not just a header + placeholder)
+        section_content = []
+        for j in range(header_idx + 1, len(lines)):
+            if lines[j].strip().startswith("## "):
+                break
+            stripped = lines[j].strip()
+            if stripped and not stripped.startswith(">"):
+                section_content.append(stripped)
+
+        has_content = len(section_content) > 0
+        is_placeholder = all(
+            c.startswith("_") and c.endswith("_") for c in section_content
+        ) if section_content else True
+
+        populated = has_content and not is_placeholder
+        results[heading] = {"present": True, "populated": populated}
+
+        if not populated:
+            warnings.append(
+                f"Section '{heading}' is present but contains only placeholder text"
+            )
+
+    all_valid = all(r["populated"] for r in results.values())
+    return {"valid": all_valid, "sections": results, "warnings": warnings}
+
+
+# ---------------------------------------------------------------------------
 # CODEBASE.md Generator
 # ---------------------------------------------------------------------------
 
@@ -345,6 +450,13 @@ class Archivist:
             hydrologist_results,
             semanticist_results,
         )
+
+        # Validate that all required sections are populated
+        validation = validate_codebase_md(codebase_md)
+        if validation["warnings"]:
+            for warning in validation["warnings"]:
+                logger.warning("CODEBASE.md validation: %s", warning)
+
         codebase_path = cartography_dir / "CODEBASE.md"
         codebase_path.write_text(codebase_md, encoding="utf-8")
         logger.info("CODEBASE.md written → %s", codebase_path)
@@ -353,7 +465,11 @@ class Archivist:
             self.trace_logger.log(
                 agent="archivist",
                 action="codebase_md_generated",
-                details={"path": str(codebase_path), "size_bytes": len(codebase_md)},
+                details={
+                    "path": str(codebase_path),
+                    "size_bytes": len(codebase_md),
+                    "validation": validation,
+                },
             )
 
         # --- Generate onboarding_brief.md ---
