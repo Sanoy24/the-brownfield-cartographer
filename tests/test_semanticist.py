@@ -107,16 +107,15 @@ class TestDomainClustering:
         self, dbt_purpose_statements: dict[str, str]
     ) -> None:
         """Every module should receive a domain cluster label."""
-        clusters = cluster_into_domains(dbt_purpose_statements, n_clusters=3)
-        assert set(clusters.keys()) == set(dbt_purpose_statements.keys())
+        result = cluster_into_domains(dbt_purpose_statements, n_clusters=3)
+        assert set(result.assignments.keys()) == set(dbt_purpose_statements.keys())
 
     def test_cluster_labels_are_not_hardcoded(
         self, dbt_purpose_statements: dict[str, str]
     ) -> None:
         """Labels should be derived from TF-IDF terms, not predefined strings."""
-        clusters = cluster_into_domains(dbt_purpose_statements, n_clusters=3)
-        labels = set(clusters.values())
-        # Labels should contain underscores from term joining, not be generic like "group_1"
+        result = cluster_into_domains(dbt_purpose_statements, n_clusters=3)
+        labels = set(result.assignments.values())
         for label in labels:
             assert "_" in label, f"Label '{label}' doesn't look term-derived"
 
@@ -124,20 +123,41 @@ class TestDomainClustering:
         self, dbt_purpose_statements: dict[str, str]
     ) -> None:
         """Staging modules should generally cluster separately from mart modules."""
-        clusters = cluster_into_domains(dbt_purpose_statements, n_clusters=3)
-        staging_clusters = {clusters[p] for p in clusters if "staging" in p}
-        mart_clusters = {clusters[p] for p in clusters if "marts" in p}
-        # At least some staging modules should share a cluster distinct from marts
-        # (This is a soft check — clustering is inherently approximate)
+        result = cluster_into_domains(dbt_purpose_statements, n_clusters=3)
+        staging_clusters = {result.assignments[p] for p in result.assignments if "staging" in p}
+        mart_clusters = {result.assignments[p] for p in result.assignments if "marts" in p}
         assert len(staging_clusters) >= 1
         assert len(mart_clusters) >= 1
 
+    def test_quality_metrics_present(
+        self, dbt_purpose_statements: dict[str, str]
+    ) -> None:
+        """ClusteringResult should contain silhouette score and per-cluster stats."""
+        result = cluster_into_domains(dbt_purpose_statements, n_clusters=3)
+        assert "silhouette_score" in result.quality_metrics
+        assert "n_clusters" in result.quality_metrics
+        assert "total_inertia" in result.quality_metrics
+        assert "clusters" in result.quality_metrics
+        # Silhouette should be between -1 and 1
+        sil = result.quality_metrics["silhouette_score"]
+        assert -1.0 <= sil <= 1.0
+
+    def test_exemplars_present_for_each_domain(
+        self, dbt_purpose_statements: dict[str, str]
+    ) -> None:
+        """Each domain should have at least one exemplar module."""
+        result = cluster_into_domains(dbt_purpose_statements, n_clusters=3)
+        for domain in set(result.assignments.values()):
+            assert domain in result.exemplars, f"Missing exemplar for domain '{domain}'"
+            assert len(result.exemplars[domain]) >= 1
+
     def test_small_input_returns_core(self) -> None:
         """With fewer than 3 modules, should return 'core' for all."""
-        clusters = cluster_into_domains({"a.py": "Does stuff", "b.py": "Other stuff"})
-        assert all(v == "core" for v in clusters.values())
+        result = cluster_into_domains({"a.py": "Does stuff", "b.py": "Other stuff"})
+        assert all(v == "core" for v in result.assignments.values())
 
     def test_empty_input(self) -> None:
         """Empty input should return empty output."""
-        clusters = cluster_into_domains({})
-        assert clusters == {}
+        result = cluster_into_domains({})
+        assert result.assignments == {}
+
