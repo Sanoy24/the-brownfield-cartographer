@@ -17,7 +17,7 @@ from typing import Optional
 
 import yaml
 
-from src.models.schemas import (
+from brownfield_cartographer.models.schemas import (
     ConfiguresEdge,
     DatasetNode,
     StorageType,
@@ -38,7 +38,7 @@ SOURCE_PATTERN = re.compile(
 # dbt Project Parsing
 # ---------------------------------------------------------------------------
 
-def parse_dbt_project(project_root: Path) -> dict:
+def parse_dbt_project(project_root: Path, source_files: tuple[Path, ...] | None = None) -> dict:
     """
     Parse a dbt project and extract the full model dependency graph.
 
@@ -56,29 +56,30 @@ def parse_dbt_project(project_root: Path) -> dict:
     transformations: list[TransformationNode] = []
     datasets: list[DatasetNode] = []
     config_edges: list[ConfiguresEdge] = []
+    if source_files is None:
+        from brownfield_cartographer.scanner import scan_repository
+        source_files = scan_repository(project_root).files
+    allowed = set(source_files)
 
     # --- Parse dbt_project.yml for metadata ---
     project_file = project_root / "dbt_project.yml"
-    if project_file.exists():
+    project_config = {}
+    if project_file in allowed:
         try:
-            project_config = yaml.safe_load(project_file.read_text(encoding="utf-8"))
+            project_config = yaml.safe_load(project_file.read_text(encoding="utf-8")) or {}
             project_name = project_config.get("name", "unknown_dbt_project")
             logger.info("Parsing dbt project: %s", project_name)
         except Exception as exc:
             logger.warning("Failed to parse dbt_project.yml: %s", exc)
 
     # --- Scan model SQL files for ref() and source() dependencies ---
-    models_dir = project_root / "models"
-    if not models_dir.exists():
-        # Some dbt projects use a different directory
-        for candidate in ("models", "dbt", "transformations"):
-            alt = project_root / candidate
-            if alt.exists():
-                models_dir = alt
-                break
-
-    if models_dir.exists():
-        for sql_file in models_dir.rglob("*.sql"):
+    model_paths = project_config.get("model-paths", ["models"])
+    model_dirs = [(project_root / p).resolve() for p in model_paths]
+    if any(not p.is_relative_to(project_root.resolve()) for p in model_dirs):
+        raise ValueError("dbt model-paths must stay within the repository")
+    model_files = [p for p in source_files if any(p.is_relative_to(d) for d in model_dirs)]
+    if model_files:
+        for sql_file in (p for p in model_files if p.suffix == ".sql"):
             relative_path = str(sql_file.relative_to(project_root)).replace("\\", "/")
             model_name = sql_file.stem
             sql_text = sql_file.read_text(encoding="utf-8", errors="replace")
@@ -103,7 +104,7 @@ def parse_dbt_project(project_root: Path) -> dict:
             )
 
     # --- Parse schema YAML files for dataset metadata ---
-    for yml_file in (models_dir if models_dir.exists() else project_root).rglob("*.yml"):
+    for yml_file in (p for p in model_files if p.suffix in {".yml", ".yaml"}):
         relative_yml = str(yml_file.relative_to(project_root)).replace("\\", "/")
         try:
             schema_data = yaml.safe_load(yml_file.read_text(encoding="utf-8"))

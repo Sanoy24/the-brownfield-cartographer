@@ -9,9 +9,9 @@ from __future__ import annotations
 
 import pytest
 
-from src.agents.hydrologist import Hydrologist
-from src.graph.knowledge_graph import KnowledgeGraph
-from src.models.schemas import (
+from brownfield_cartographer.agents.hydrologist import Hydrologist
+from brownfield_cartographer.graph.knowledge_graph import KnowledgeGraph
+from brownfield_cartographer.models.schemas import (
     DatasetNode,
     StorageType,
     TransformationNode,
@@ -162,9 +162,9 @@ class TestFindSourcesSinks:
             assert src.startswith("ecom.raw_"), f"Unexpected source: {src}"
 
     def test_dbt_sinks_are_mart_outputs(self, dbt_lineage_graph: KnowledgeGraph) -> None:
-        """The 5 terminal mart tables should be identified as sinks."""
+        """Only terminal marts are sinks; intermediate marts have consumers."""
         sinks = Hydrologist.find_sinks(dbt_lineage_graph)
-        expected_sinks = {"customers", "orders", "order_items", "products", "supplies", "locations"}
+        expected_sinks = {"customers", "products", "supplies", "locations"}
         assert set(sinks) == expected_sinks
 
     def test_airflow_single_source(self, airflow_lineage_graph: KnowledgeGraph) -> None:

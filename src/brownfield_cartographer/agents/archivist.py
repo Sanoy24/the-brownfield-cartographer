@@ -20,7 +20,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from src.graph.knowledge_graph import KnowledgeGraph
+from brownfield_cartographer.graph.knowledge_graph import KnowledgeGraph
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +40,8 @@ class TraceLogger:
     def __init__(self, output_path: Path) -> None:
         self._path = output_path
         self._entries: list[dict[str, Any]] = []
+        from uuid import uuid4
+        self.run_id = uuid4().hex
 
     def log(
         self,
@@ -51,6 +53,7 @@ class TraceLogger:
     ) -> None:
         """Record an analysis action."""
         entry = {
+            "run_id": self.run_id,
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "agent": agent,
             "action": action,
@@ -290,7 +293,7 @@ def generate_codebase_md(
         sections.append("")
 
     if debt_items == 0:
-        sections.append("_No significant technical debt detected._\n")
+        sections.append("_No findings from the supported checks; this is not a complete debt assessment._\n")
 
     # --- High-Velocity Files ---
     sections.append("## High-Velocity Files (Recent Change Hotspots)\n")
@@ -325,6 +328,9 @@ def generate_codebase_md(
         else:
             for path, purpose in sorted(purpose_statements.items()):
                 sections.append(f"**`{path}`**: {purpose}\n")
+    else:
+        sections.append("## Module Purpose Index\n")
+        sections.append("Static mode does not infer module purposes. Inspect symbols and dependencies in the index.\n")
 
     return "\n".join(sections)
 
@@ -412,9 +418,7 @@ class Archivist:
     def init_trace(self, cartography_dir: Path) -> TraceLogger:
         """Initialize the trace logger for a new analysis run."""
         trace_path = cartography_dir / "cartography_trace.jsonl"
-        # Clear previous trace for fresh runs
-        if trace_path.exists():
-            trace_path.unlink()
+        # Preserve previous run history even when a snapshot is unchanged.
         self.trace_logger = TraceLogger(trace_path)
         return self.trace_logger
 

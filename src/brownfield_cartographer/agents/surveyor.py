@@ -19,13 +19,14 @@ from typing import Any, Optional
 
 import networkx as nx
 
-from src.analyzers.tree_sitter_analyzer import (
+from brownfield_cartographer.analyzers.tree_sitter_analyzer import (
     analyze_module,
     detect_language,
     extract_functions_from_file,
 )
-from src.graph.knowledge_graph import KnowledgeGraph
-from src.models.schemas import Language, ModuleNode
+from brownfield_cartographer.graph.knowledge_graph import KnowledgeGraph
+from brownfield_cartographer.models.schemas import Language, ModuleNode
+from brownfield_cartographer.scanner import ScanResult, scan_repository
 
 logger = logging.getLogger(__name__)
 
@@ -52,16 +53,7 @@ def _collect_source_files(repo_root: Path) -> list[Path]:
     Skips hidden directories, virtual environments, and build artifacts.
     Returns absolute paths sorted alphabetically.
     """
-    source_files: list[Path] = []
-
-    for item in repo_root.rglob("*"):
-        # Skip excluded directories
-        if any(_should_skip_dir(part) for part in item.parts):
-            continue
-        if item.is_file() and item.suffix.lower() in SCANNABLE_EXTENSIONS:
-            source_files.append(item)
-
-    return sorted(source_files)
+    return list(scan_repository(repo_root).files)
 
 
 # ---------------------------------------------------------------------------
@@ -184,6 +176,7 @@ class Surveyor:
         repo_root: Path,
         knowledge_graph: KnowledgeGraph,
         changed_files: set[str] | None = None,
+        inventory: ScanResult | None = None,
     ) -> dict[str, Any]:
         """
         Execute full or incremental structural analysis on the given repository.
@@ -210,7 +203,7 @@ class Surveyor:
         Returns:
             Dict with analysis summary and key metrics.
         """
-        source_files = _collect_source_files(repo_root)
+        source_files = list((inventory or scan_repository(repo_root)).files)
         path_map = {
             str(f.relative_to(repo_root)).replace("\\", "/"): f
             for f in source_files
@@ -226,8 +219,14 @@ class Surveyor:
 
         # Full run: parse all files
         modules: dict[str, ModuleNode] = {}
+        diagnostics = []
         for file_path in source_files:
-            module = analyze_module(file_path, repo_root)
+            try:
+                module = analyze_module(file_path, repo_root)
+            except (ValueError, OSError) as exc:
+                diagnostics.append({"path": file_path.relative_to(repo_root).as_posix(),
+                                    "error": str(exc), "incomplete": True})
+                continue
             if module:
                 modules[module.path] = module
 
@@ -249,18 +248,25 @@ class Surveyor:
         all_module_paths = set(modules.keys())
         for module in modules.values():
             for imp in module.imports:
-                target = _resolve_import(imp, all_module_paths)
+                target = _resolve_import(imp, all_module_paths, module.path)
                 if target and target != module.path:
-                    knowledge_graph.add_import_edge(module.path, target)
+                    locations = module.import_locations.get(imp, [])
+                    knowledge_graph.add_import_edge(module.path, target, line_range=locations[0] if locations else None)
 
         for file_path in source_files:
+            if file_path.relative_to(repo_root).as_posix() not in modules:
+                continue
             functions = extract_functions_from_file(file_path, repo_root)
             for fn in functions:
                 knowledge_graph.add_function_node(fn)
 
-        return self._build_summary(
+        summary = self._build_summary(
             knowledge_graph, source_files, modules, dead_code, velocity
         )
+        summary["diagnostics"] = diagnostics
+        summary["unsupported_structure"] = sorted(
+            p for p, module in modules.items() if module.language in {Language.JAVASCRIPT, Language.TYPESCRIPT})
+        return summary
 
     def _run_incremental(
         self,
@@ -291,23 +297,29 @@ class Surveyor:
             knowledge_graph.remove_import_edges_for_module(rel_path)
             knowledge_graph.add_module_node(module)
 
+        # A changed or new dependency can alter edges of unchanged importers.
+        knowledge_graph.graph.remove_edges_from([
+            (u, v) for u, v, d in knowledge_graph.graph.edges(data=True)
+            if d.get("edge_type") == "IMPORTS"
+        ])
         all_module_paths = set(knowledge_graph._module_nodes.keys())
-        for rel_path in updated_paths:
+        for rel_path in all_module_paths:
             if rel_path not in knowledge_graph._module_nodes:
                 continue
             module = knowledge_graph._module_nodes[rel_path]
             for imp in module.imports:
-                target = _resolve_import(imp, all_module_paths)
+                target = _resolve_import(imp, all_module_paths, rel_path)
                 if target and target != module.path:
-                    knowledge_graph.add_import_edge(module.path, target)
+                    locations = module.import_locations.get(imp, [])
+                    knowledge_graph.add_import_edge(module.path, target, line_range=locations[0] if locations else None)
 
         # Recompute git velocity for all modules
         velocity = extract_git_velocity(repo_root)
-        for path, commits in velocity.items():
-            if path in knowledge_graph._module_nodes:
-                knowledge_graph._module_nodes[path].change_velocity_30d = commits
-                if knowledge_graph.graph.has_node(path):
-                    knowledge_graph.graph.nodes[path]["change_velocity_30d"] = commits
+        for path in knowledge_graph._module_nodes:
+            commits = velocity.get(path, 0)
+            knowledge_graph._module_nodes[path].change_velocity_30d = commits
+            if knowledge_graph.graph.has_node(path):
+                knowledge_graph.graph.nodes[path]["change_velocity_30d"] = commits
 
         # Re-detect dead code on full module set
         dead_code = _detect_dead_code(dict(knowledge_graph._module_nodes))
@@ -371,12 +383,24 @@ class Surveyor:
         return summary
 
 
-def _resolve_import(import_name: str, known_paths: set[str]) -> Optional[str]:
+def _resolve_import(import_name: str, known_paths: set[str], importer: str = "") -> Optional[str]:
     """
     Attempt to resolve a Python import name to a known module file path.
 
     Handles dotted imports by converting them to path separators.
     """
+    if import_name.startswith("."):
+        level = len(import_name) - len(import_name.lstrip("."))
+        parts = importer.replace("\\", "/").split("/")[:-1]
+        if level > len(parts):
+            return None
+        base = parts[:len(parts) - level + 1]
+        tail = import_name[level:].replace(".", "/")
+        path = "/".join(base + ([tail] if tail else []))
+        for candidate in (path + ".py", path + "/__init__.py"):
+            if candidate in known_paths:
+                return candidate
+        return None
     # Convert dotted name to potential file paths
     path_variants = [
         import_name.replace(".", "/") + ".py",
@@ -386,10 +410,10 @@ def _resolve_import(import_name: str, known_paths: set[str]) -> Optional[str]:
     for variant in path_variants:
         if variant in known_paths:
             return variant
-        # Try partial suffix matching for relative imports
-        for known_path in known_paths:
-            if known_path.endswith(variant):
-                return known_path
+        # Only an unambiguous source-layout suffix is safe to infer.
+        matches = sorted(p for p in known_paths if p.endswith("/" + variant))
+        if len(matches) == 1:
+            return matches[0]
 
     return None
 

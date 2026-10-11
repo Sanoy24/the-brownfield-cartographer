@@ -9,13 +9,14 @@ on file extension, enabling unified analysis across polyglot codebases.
 from __future__ import annotations
 
 import logging
+import ast
 from pathlib import Path
 from typing import Optional
 
 import tree_sitter_python as tspython
-from tree_sitter import Language, Parser, Node, QueryCursor
+from tree_sitter import Language, Parser, Node, Query, QueryCursor
 
-from src.models.schemas import (
+from brownfield_cartographer.models.schemas import (
     FunctionNode,
     Language as LangEnum,
     ModuleNode,
@@ -102,7 +103,7 @@ def _extract_imports(root_node: Node, source_code: bytes) -> list[str]:
     iterate over the dict values to get the matched nodes.
     """
     lang = _get_python_language()
-    query = lang.query(PYTHON_QUERIES["imports"])
+    query = Query(lang, PYTHON_QUERIES["imports"])
     cursor = QueryCursor(query)
 
     imports: list[str] = []
@@ -128,7 +129,9 @@ def _extract_functions(
 
     def _walk(node: Node, class_prefix: str = "") -> None:
         for child in node.children:
-            if child.type == "function_definition":
+            if child.type == "decorated_definition":
+                _walk(child, class_prefix=class_prefix)
+            elif child.type == "function_definition":
                 name_node = child.child_by_field_name("name")
                 if not name_node:
                     continue
@@ -173,7 +176,7 @@ def _extract_classes(root_node: Node, source_code: bytes) -> list[str]:
     direct child of the module root node (i.e. top-level classes).
     """
     lang = _get_python_language()
-    query = lang.query(PYTHON_QUERIES["classes"])
+    query = Query(lang, PYTHON_QUERIES["classes"])
     cursor = QueryCursor(query)
 
     classes: list[str] = []
@@ -200,7 +203,7 @@ def _compute_complexity(root_node: Node, lines_of_code: int) -> float:
     comparable to small ones.
     """
     lang = _get_python_language()
-    query = lang.query(PYTHON_QUERIES["complexity"])
+    query = Query(lang, PYTHON_QUERIES["complexity"])
     cursor = QueryCursor(query)
     captures: dict = cursor.captures(root_node)
 
@@ -270,6 +273,26 @@ def analyze_module(file_path: Path, repo_root: Path) -> Optional[ModuleNode]:
             root = tree.root_node
 
             module.imports = _extract_imports(root, source_bytes)
+            try:
+                syntax = ast.parse(source_text)
+                imports = []
+                for node in ast.walk(syntax):
+                    names = []
+                    if isinstance(node, ast.Import):
+                        names.extend(alias.name for alias in node.names)
+                    elif isinstance(node, ast.ImportFrom):
+                        base = "." * node.level + (node.module or "")
+                        if base:
+                            names.append(base)
+                        for alias in node.names:
+                            if alias.name != "*":
+                                names.append(base + ("" if base.endswith(".") else ".") + alias.name)
+                    for name in names:
+                        imports.append(name)
+                        module.import_locations.setdefault(name, []).append((node.lineno, node.end_lineno or node.lineno))
+                module.imports = sorted(set(imports))
+            except SyntaxError as exc:
+                raise ValueError(f"Invalid Python in {relative_path}:{exc.lineno}") from exc
             module.classes = _extract_classes(root, source_bytes)
             module.public_functions = [
                 fn.qualified_name.split("::")[-1]

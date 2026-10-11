@@ -1,9 +1,7 @@
 [project]
 name = "the-brownfield-cartographer"
 version = "0.2.0"
-description = """TRP 1 Week 4: The Brownfield Cartographer
-Engineering Codebase Intelligence Systems for Rapid FDE Onboarding in Production Environments
-"""
+description = "Local-first, deterministic repository structure and data lineage analysis"
 authors = [
     { name = "Yonas Mekonnen", email = "myonas886@gmail.com" }
 ]
@@ -17,6 +15,7 @@ dependencies = [
     "rich>=13.0",
     "PyYAML>=6.0",
     "gitpython>=3.1",
+    "pathspec>=0.12,<1",
     # Static analysis
     "tree-sitter>=0.23",
     "tree-sitter-python>=0.23",
@@ -24,7 +23,14 @@ dependencies = [
     # Graph analysis
     "numpy>=1.26",
     "scipy>=1.14",
-    # LLM & Agent (dynamic provider support)
+    # Environment
+    "python-dotenv>=1.0",
+]
+
+[project.optional-dependencies]
+mcp = ["mcp>=1.26,<2"]
+llm = [
+    # Legacy, explicitly enabled enrichment; the core never calls a model.
     "langchain-core>=0.3",
     "langchain-openai>=0.3",
     "langchain-google-genai>=2.0",
@@ -32,16 +38,24 @@ dependencies = [
     "langgraph>=0.2",
     # Domain clustering
     "scikit-learn>=1.5",
-    # Environment
-    "python-dotenv>=1.0",
 ]
 
+[dependency-groups]
+dev = ["pytest>=8,<10", "ruff>=0.11", "mypy>=1.15"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff.lint]
+select = ["E9", "F63", "F7", "F82"]
+
 [project.scripts]
-cartographer = "src.cli:app"
+cartographer = "brownfield_cartographer.cli:app"
+cartographer-mcp = "brownfield_cartographer.mcp_server:main"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src"]
+packages = ["src/brownfield_cartographer"]

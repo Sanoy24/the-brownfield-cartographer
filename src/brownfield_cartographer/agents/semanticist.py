@@ -23,8 +23,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from src.graph.knowledge_graph import KnowledgeGraph
-from src.models.schemas import ModuleNode
+from brownfield_cartographer.graph.knowledge_graph import KnowledgeGraph
+from brownfield_cartographer.models.schemas import ModuleNode
 
 logger = logging.getLogger(__name__)
 
@@ -454,7 +454,7 @@ def cluster_into_domains(
     texts = [purpose_statements[p] for p in paths]
 
     # Adjust cluster count to data size
-    k = min(n_clusters, len(texts))
+    k = max(1, min(n_clusters, len(texts) - 1))
 
     vectorizer = TfidfVectorizer(
         max_features=500,
@@ -468,7 +468,8 @@ def cluster_into_domains(
     labels = kmeans.fit_predict(tfidf_matrix)
 
     # --- Quality metrics ---
-    silhouette = float(silhouette_score(tfidf_matrix, labels)) if k > 1 else 1.0
+    label_count = len(set(labels))
+    silhouette = float(silhouette_score(tfidf_matrix, labels)) if 1 < label_count < len(texts) else None
 
     # Per-cluster stats
     cluster_stats: dict[str, dict[str, Any]] = {}
@@ -517,7 +518,7 @@ def cluster_into_domains(
     quality_metrics = {
         "n_clusters": k,
         "total_inertia": round(float(kmeans.inertia_), 4),
-        "silhouette_score": round(silhouette, 4),
+        "silhouette_score": round(silhouette, 4) if silhouette is not None else None,
         "clusters": cluster_stats,
     }
 
@@ -845,7 +846,7 @@ class Semanticist:
                         knowledge_graph.graph.nodes[path]["domain_cluster"] = domain
 
             logger.info(
-                "Clustered %d modules into %d domains (silhouette=%.3f)",
+                "Clustered %d modules into %d domains (silhouette=%s)",
                 len(domain_clusters),
                 clustering_result.quality_metrics.get("n_clusters", 0),
                 clustering_result.quality_metrics.get("silhouette_score", 0),

@@ -24,7 +24,7 @@ from rich.console import Console
 from rich.markdown import Markdown
 from rich.panel import Panel
 
-from src.graph.knowledge_graph import KnowledgeGraph
+from brownfield_cartographer.graph.knowledge_graph import KnowledgeGraph
 
 logger = logging.getLogger(__name__)
 console = Console()
@@ -185,10 +185,7 @@ def tool_trace_lineage(
         )
 
         # Traverse in the requested direction
-        if direction == "upstream":
-            neighbors = graph.predecessors(current)
-        else:
-            neighbors = graph.successors(current)
+        neighbors = knowledge_graph.lineage_neighbors(current, direction)
 
         for neighbor in neighbors:
             if neighbor not in visited:
@@ -221,16 +218,15 @@ def tool_blast_radius(
             "available_modules": available,
         }]
 
-    visited: set[str] = set()
+    visited: set[str] = {target_node}
     affected: list[dict[str, Any]] = []
     queue: deque[tuple[str, int]] = deque([(target_node, 0)])
 
     while queue:
         current, depth = queue.popleft()
-        for successor in graph.successors(current):
+        for successor, edge_data in knowledge_graph.impact_neighbors(current):
             if successor not in visited:
                 visited.add(successor)
-                edge_data = graph.edges.get((current, successor), {})
                 succ_attrs = graph.nodes[successor]
 
                 # Derive line range for evidence
@@ -399,7 +395,7 @@ def build_navigator_agent(knowledge_graph: KnowledgeGraph) -> Any:
     Uses a ReAct architecture with LangGraph's prebuilt agent.
     Falls back to a simple tool-dispatch loop if LangGraph is unavailable.
     """
-    from src.agents.semanticist import LLMConfig, _create_chat_model
+    from brownfield_cartographer.agents.semanticist import LLMConfig, _create_chat_model
 
     config = LLMConfig.from_env()
     llm = _create_chat_model(config)
@@ -458,14 +454,14 @@ def build_navigator_agent(knowledge_graph: KnowledgeGraph) -> Any:
 # ---------------------------------------------------------------------------
 
 
-def run_interactive(knowledge_graph: KnowledgeGraph) -> None:
+def run_interactive(knowledge_graph: KnowledgeGraph, use_llm: bool = False) -> None:
     """
     Start an interactive query REPL for exploring the knowledge graph.
 
     Supports both natural language queries (via LangGraph agent) and
     direct tool commands (fallback when no LLM is available).
     """
-    agent = build_navigator_agent(knowledge_graph)
+    agent = build_navigator_agent(knowledge_graph) if use_llm else None
 
     console.print(
         Panel(
@@ -479,7 +475,7 @@ def run_interactive(knowledge_graph: KnowledgeGraph) -> None:
             "  [cyan]explain[/cyan] <path>         — Explain a module\n"
             "  [cyan]summary[/cyan]               — Show graph summary\n"
             "  [cyan]quit[/cyan]                  — Exit\n\n"
-            "[dim]Or type any natural language question (requires LLM).[/dim]",
+            "[dim]Direct commands use the local graph. Natural-language reasoning belongs to the host assistant.[/dim]",
             title="Navigator",
             border_style="cyan",
         )

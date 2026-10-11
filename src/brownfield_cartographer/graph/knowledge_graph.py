@@ -9,6 +9,7 @@ consumed by the query interface and artifact generators.
 from __future__ import annotations
 
 import json
+import hashlib
 import logging
 from pathlib import Path
 from typing import Any, Optional
@@ -16,7 +17,7 @@ from typing import Any, Optional
 import networkx as nx
 from networkx.readwrite import json_graph
 
-from src.models.schemas import DatasetNode, FunctionNode, ModuleNode, TransformationNode
+from brownfield_cartographer.models.schemas import DatasetNode, FunctionNode, ModuleNode, TransformationNode
 
 logger = logging.getLogger(__name__)
 
@@ -43,76 +44,71 @@ class KnowledgeGraph:
 
     def add_module_node(self, module: ModuleNode) -> None:
         """Register a source file as a module node in the graph."""
+        self._require_node_type(module.path, "module")
         self._module_nodes[module.path] = module
-        self.graph.add_node(
-            module.path,
-            node_type="module",
-            language=module.language.value,
-            lines_of_code=module.lines_of_code,
-            complexity_score=module.complexity_score,
-            change_velocity_30d=module.change_velocity_30d,
-            is_dead_code_candidate=module.is_dead_code_candidate,
-            public_functions=module.public_functions,
-            classes=module.classes,
-        )
+        self.graph.add_node(module.path, node_type="module", **module.model_dump(mode="json"))
 
     def add_dataset_node(self, dataset: DatasetNode) -> None:
         """Register a data asset (table, file, stream) in the graph."""
+        self._require_node_type(dataset.name, "dataset")
         self._dataset_nodes[dataset.name] = dataset
-        self.graph.add_node(
-            dataset.name,
-            node_type="dataset",
-            storage_type=dataset.storage_type.value,
-            is_source_of_truth=dataset.is_source_of_truth,
-        )
+        self.graph.add_node(dataset.name, node_type="dataset", **dataset.model_dump(mode="json"))
 
     def add_function_node(self, function: FunctionNode) -> None:
         """Register a function/method in the graph."""
+        self._require_node_type(function.qualified_name, "function")
         self._function_nodes[function.qualified_name] = function
-        self.graph.add_node(
-            function.qualified_name,
-            node_type="function",
-            parent_module=function.parent_module,
-            signature=function.signature,
-            is_public_api=function.is_public_api,
-        )
+        self.graph.add_node(function.qualified_name, node_type="function", **function.model_dump(mode="json"))
 
     def add_transformation_node(self, transformation: TransformationNode) -> None:
         """Register a data transformation and create lineage edges."""
-        self._transformation_nodes.append(transformation)
-
-        # Create a unique ID for this transformation
+        # Include operation identity: multiple statements/tasks can share a span.
+        identity = json.dumps(transformation.model_dump(mode="json"), sort_keys=True)
         tx_id = (
             f"tx:{transformation.source_file}"
-            f":{transformation.line_range[0]}-{transformation.line_range[1]}"
+            f":{transformation.line_range[0]}-{transformation.line_range[1]}:"
+            f"{hashlib.sha256(identity.encode()).hexdigest()[:16]}"
         )
+        if tx_id not in self.graph:
+            self._transformation_nodes.append(transformation)
         self.graph.add_node(
             tx_id,
             node_type="transformation",
-            transformation_type=transformation.transformation_type.value,
-            source_file=transformation.source_file,
+            **transformation.model_dump(mode="json"),
             line_start=transformation.line_range[0],
             line_end=transformation.line_range[1],
         )
+        if transformation.source_file not in self.graph:
+            self.add_module_node(ModuleNode(path=transformation.source_file))
+        self.graph.add_edge(transformation.source_file, tx_id, edge_type="DEFINES",
+                            source_file=transformation.source_file,
+                            line_range=list(transformation.line_range), confidence="static")
+        heuristic = transformation.transformation_type.value in {"python_transform", "config_pipeline"}
+        evidence = {"source_file": transformation.source_file,
+                    "line_range": list(transformation.line_range),
+                    "confidence": "inferred" if heuristic else "syntax",
+                    "analysis_method": "scope_heuristic" if heuristic else "sql_or_dbt_reference"}
+        self.graph.nodes[tx_id].update(evidence)
 
         # Create CONSUMES edges (source datasets → transformation)
         for src_dataset in transformation.source_datasets:
             if src_dataset not in self.graph:
-                self.graph.add_node(src_dataset, node_type="dataset")
-            self.graph.add_edge(src_dataset, tx_id, edge_type="CONSUMES")
+                self.add_dataset_node(DatasetNode(name=src_dataset))
+            self.graph.add_edge(src_dataset, tx_id, edge_type="CONSUMES", **evidence)
 
         # Create PRODUCES edges (transformation → target datasets)
         for tgt_dataset in transformation.target_datasets:
             if tgt_dataset not in self.graph:
-                self.graph.add_node(tgt_dataset, node_type="dataset")
-            self.graph.add_edge(tx_id, tgt_dataset, edge_type="PRODUCES")
+                self.add_dataset_node(DatasetNode(name=tgt_dataset))
+            self.graph.add_edge(tx_id, tgt_dataset, edge_type="PRODUCES", **evidence)
 
     # ------------------------------------------------------------------
     # Edge insertion
     # ------------------------------------------------------------------
 
     def add_import_edge(
-        self, source_module: str, target_module: str, weight: int = 1
+        self, source_module: str, target_module: str, weight: int = 1,
+        line_range: tuple[int, int] | None = None,
     ) -> None:
         """Record that source_module imports from target_module."""
         self.graph.add_edge(
@@ -120,6 +116,10 @@ class KnowledgeGraph:
             target_module,
             edge_type="IMPORTS",
             weight=weight,
+            source_file=source_module,
+            confidence="static",
+            line_range=list(line_range) if line_range else None,
+            analysis_method="python_import",
         )
 
     def add_calls_edge(self, caller: str, callee: str) -> None:
@@ -128,7 +128,37 @@ class KnowledgeGraph:
 
     def add_configures_edge(self, config_file: str, target: str) -> None:
         """Record that a config file configures a module or pipeline."""
-        self.graph.add_edge(config_file, target, edge_type="CONFIGURES")
+        if config_file not in self.graph:
+            self.graph.add_node(config_file, node_type="config", path=config_file)
+        self.graph.add_edge(config_file, target, edge_type="CONFIGURES", source_file=config_file)
+
+    def impact_neighbors(self, node: str):
+        """Potential consumers, respecting the semantics of each relationship."""
+        for neighbor in self.graph.predecessors(node):
+            edge = self.graph.edges[neighbor, node]
+            if edge.get("edge_type") in {"IMPORTS", "CALLS"}:
+                yield neighbor, edge
+        for neighbor in self.graph.successors(node):
+            edge = self.graph.edges[node, neighbor]
+            if edge.get("edge_type") in {"CONSUMES", "PRODUCES", "DEFINES", "CONFIGURES"}:
+                yield neighbor, edge
+
+    def lineage_neighbors(self, node: str, direction: str):
+        if direction not in {"upstream", "downstream"}:
+            raise ValueError("Direction must be upstream or downstream")
+        neighbors = self.graph.predecessors(node) if direction == "upstream" else self.graph.successors(node)
+        for neighbor in neighbors:
+            edge = self.graph.edges[neighbor, node] if direction == "upstream" else self.graph.edges[node, neighbor]
+            if edge.get("edge_type") in {"CONSUMES", "PRODUCES"}:
+                yield neighbor
+
+    def clear_lineage(self) -> None:
+        """Remove observations owned by lineage extractors before a safe rebuild."""
+        nodes = [n for n, d in self.graph.nodes(data=True)
+                 if d.get("node_type") in {"dataset", "transformation", "config"}]
+        self.graph.remove_nodes_from(nodes)
+        self._dataset_nodes.clear()
+        self._transformation_nodes.clear()
 
     # ------------------------------------------------------------------
     # Node/edge removal (for incremental updates)
@@ -192,6 +222,9 @@ class KnowledgeGraph:
         changed files and merge.
         """
         self.clear()
+        if (cartography_dir / "index.json").exists():
+            self.load_index(cartography_dir / "index.json")
+            return
         module_path = cartography_dir / "module_graph.json"
         if module_path.exists():
             self.load_module_graph(module_path)
@@ -204,6 +237,7 @@ class KnowledgeGraph:
             self.graph.number_of_nodes(),
             self.graph.number_of_edges(),
         )
+        self._restore_indices()
 
     # ------------------------------------------------------------------
     # Query helpers
@@ -262,12 +296,11 @@ class KnowledgeGraph:
 
         Uses NetworkX's node-link format for easy re-loading.
         """
-        module_graph = self.get_module_subgraph()
+        nodes = [n for n, d in self.graph.nodes(data=True) if d.get("node_type") in {"module", "function"}]
+        module_graph = self.graph.subgraph(nodes).copy()
         data = json_graph.node_link_data(module_graph)
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        output_path.write_text(
-            json.dumps(data, indent=2, default=str), encoding="utf-8"
-        )
+        from brownfield_cartographer.persistence import write_json
+        write_json(output_path, data)
         logger.info(
             "Module graph written: %d nodes, %d edges → %s",
             module_graph.number_of_nodes(),
@@ -284,10 +317,8 @@ class KnowledgeGraph:
         """
         lineage_graph = self.get_lineage_subgraph()
         data = json_graph.node_link_data(lineage_graph)
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        output_path.write_text(
-            json.dumps(data, indent=2, default=str), encoding="utf-8"
-        )
+        from brownfield_cartographer.persistence import write_json
+        write_json(output_path, data)
         logger.info(
             "Lineage graph written: %d nodes, %d edges → %s",
             lineage_graph.number_of_nodes(),
@@ -373,6 +404,9 @@ class KnowledgeGraph:
             A KnowledgeGraph instance populated with the saved data.
         """
         kg = cls()
+        if (cartography_dir / "index.json").exists():
+            kg.load_index(cartography_dir / "index.json")
+            return kg
 
         module_path = cartography_dir / "module_graph.json"
         if module_path.exists():
@@ -381,6 +415,7 @@ class KnowledgeGraph:
         lineage_path = cartography_dir / "lineage_graph.json"
         if lineage_path.exists():
             kg.load_lineage_graph(lineage_path)
+        kg._restore_indices()
 
         logger.info(
             "KnowledgeGraph restored from %s — %d nodes, %d edges",
@@ -389,6 +424,41 @@ class KnowledgeGraph:
             kg.graph.number_of_edges(),
         )
         return kg
+
+    def serialize_index(self, output_path: Path) -> None:
+        """Persist the complete graph with an explicit artifact version."""
+        from brownfield_cartographer.persistence import write_json
+        write_json(output_path, {"schema_version": 1,
+                                 "graph": json_graph.node_link_data(self.graph, edges="edges")})
+
+    def load_index(self, input_path: Path) -> None:
+        raw = json.loads(input_path.read_text(encoding="utf-8"))
+        if raw.get("schema_version") != 1:
+            raise ValueError("Unsupported index schema version; rebuild the index")
+        graph = json_graph.node_link_graph(raw["graph"], edges="edges")
+        if not graph.is_directed() or graph.is_multigraph():
+            raise ValueError("Expected a directed graph index")
+        self.clear()
+        self.graph = graph
+        self._restore_indices()
+
+    def _restore_indices(self) -> None:
+        self._module_nodes.clear()
+        self._dataset_nodes.clear()
+        self._function_nodes.clear()
+        self._transformation_nodes.clear()
+        for node, attrs in self.graph.nodes(data=True):
+            kind = attrs.get("node_type")
+            if kind == "module":
+                self._module_nodes[node] = ModuleNode.model_validate({"path": node, **attrs})
+            elif kind == "dataset":
+                self._dataset_nodes[node] = DatasetNode.model_validate({"name": node, **attrs})
+            elif kind == "function":
+                self._function_nodes[node] = FunctionNode.model_validate({"qualified_name": node, **attrs})
+            elif kind == "transformation":
+                self._transformation_nodes.append(TransformationNode.model_validate({
+                    "line_range": [attrs.get("line_start", 0), attrs.get("line_end", 0)], **attrs,
+                }))
 
     # ------------------------------------------------------------------
     # Summary
@@ -408,5 +478,10 @@ class KnowledgeGraph:
             "datasets": len(self._dataset_nodes),
             "functions": len(self._function_nodes),
             "transformations": transformation_count,
-            "circular_dependencies": len(self.find_circular_dependencies()),
+            "circular_dependencies": len(self.find_circular_dependencies(self.get_module_subgraph())),
         }
+
+    def _require_node_type(self, node: str, kind: str) -> None:
+        existing = self.graph.nodes.get(node, {}).get("node_type")
+        if existing is not None and existing != kind:
+            raise ValueError(f"Node identity collision for {node}: {existing} versus {kind}")

@@ -9,6 +9,7 @@ and YAML configuration files.
 from __future__ import annotations
 
 import logging
+import ast
 import re
 from collections import deque
 from pathlib import Path
@@ -16,10 +17,11 @@ from typing import Any
 
 import networkx as nx
 
-from src.analyzers.dag_config_parser import parse_airflow_dag, parse_dbt_project
-from src.analyzers.sql_lineage import analyze_sql_file, analyze_sql_string
-from src.graph.knowledge_graph import KnowledgeGraph
-from src.models.schemas import (
+from brownfield_cartographer.analyzers.dag_config_parser import parse_airflow_dag, parse_dbt_project
+from brownfield_cartographer.analyzers.sql_lineage import analyze_sql_file, analyze_sql_string
+from brownfield_cartographer.graph.knowledge_graph import KnowledgeGraph
+from brownfield_cartographer.scanner import ScanResult, scan_repository
+from brownfield_cartographer.models.schemas import (
     DatasetNode,
     StorageType,
     TransformationNode,
@@ -75,9 +77,8 @@ def _analyze_python_data_flow(
     """
     Scan a Python file for data read/write operations.
 
-    Uses regex patterns to detect pandas, PySpark, and SQLAlchemy
-    data access calls. Returns TransformationNodes for each detected
-    data flow operation.
+    Use Python AST calls to associate supported literal reads/writes per scope.
+    Associations are conservative heuristics, not exact dataframe provenance.
     """
     relative_path = str(file_path.relative_to(repo_root)).replace("\\", "/")
 
@@ -87,48 +88,49 @@ def _analyze_python_data_flow(
         logger.warning("Cannot read %s: %s", relative_path, exc)
         return []
 
-    transformations: list[TransformationNode] = []
-    reads: list[str] = []
-    writes: list[str] = []
+    syntax = ast.parse(source_text)
+    aliases = {"pandas", "pd"}
+    for node in ast.walk(syntax):
+        if isinstance(node, ast.Import):
+            aliases.update(alias.asname or alias.name for alias in node.names if alias.name == "pandas")
+    transformations = []
 
-    # Detect pandas read operations
-    for pattern in PANDAS_READ_PATTERNS:
-        reads.extend(pattern.findall(source_text))
+    def calls_in_scope(node):
+        for child in ast.iter_child_nodes(node):
+            if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Lambda)):
+                continue
+            if isinstance(child, ast.Call):
+                yield child
+            yield from calls_in_scope(child)
 
-    # Detect pandas write operations
-    for pattern in PANDAS_WRITE_PATTERNS:
-        writes.extend(pattern.findall(source_text))
-
-    # Detect Spark read/write operations
-    for pattern in SPARK_READ_PATTERNS:
-        reads.extend(pattern.findall(source_text))
-    for pattern in SPARK_WRITE_PATTERNS:
-        writes.extend(pattern.findall(source_text))
-
-    # Detect inline SQL executed via SQLAlchemy style calls
-    inline_sql_transforms: list[TransformationNode] = []
-    for pattern in SQLALCHEMY_PATTERNS:
-        for sql_text in pattern.findall(source_text):
-            inline_sql_transforms.extend(
-                analyze_sql_string(
-                    sql_text,
-                    source_file=relative_path,
-                )
-            )
-
-    # If we found any data I/O, create a transformation node
-    if reads or writes:
-        transformations.append(
-            TransformationNode(
-                source_datasets=reads if reads else ["<dynamic_source>"],
-                target_datasets=writes if writes else [f"<output_of:{relative_path}>"],
+    scopes = [syntax, *(n for n in ast.walk(syntax) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)))]
+    for scope in scopes:
+        reads, writes, locations = [], [], []
+        for call in calls_in_scope(scope):
+            if not isinstance(call.func, ast.Attribute):
+                continue
+            method = call.func.attr
+            name = ast.unparse(call.func.value)
+            read = ((name in aliases and method in {"read_csv", "read_parquet", "read_excel", "read_json"})
+                    or (name == "spark.read" and method in {"csv", "parquet", "json", "table"})
+                    or (name == "spark" and method == "table"))
+            write = method in {"to_csv", "to_parquet", "to_excel", "to_json", "to_sql", "saveAsTable"}
+            if not (read or write):
+                continue
+            value = call.args[0] if call.args else next((k.value for k in call.keywords if k.arg in
+                {"path", "path_or_buf", "filepath_or_buffer", "name"}), None)
+            literal = value.value if isinstance(value, ast.Constant) and isinstance(value.value, str) else None
+            dataset = literal or f"<unresolved:{relative_path}:{call.lineno}>"
+            (reads if read else writes).append(dataset)
+            locations.append((call.lineno, call.end_lineno or call.lineno))
+        if reads or writes:
+            # Conservative scope-level association, not exact dataframe tracking.
+            transformations.append(TransformationNode(
+                source_file=relative_path, source_datasets=sorted(set(reads)),
+                target_datasets=sorted(set(writes)),
                 transformation_type=TransformationType.PYTHON_TRANSFORM,
-                source_file=relative_path,
-                line_range=(1, len(source_text.split("\n"))),
-            )
-        )
-    transformations.extend(inline_sql_transforms)
-
+                line_range=(min(p[0] for p in locations), max(p[1] for p in locations)),
+            ))
     return transformations
 
 
@@ -155,9 +157,10 @@ class Hydrologist:
         repo_root: Path,
         knowledge_graph: KnowledgeGraph,
         changed_files: set[str] | None = None,
+        inventory: ScanResult | None = None,
     ) -> dict[str, Any]:
         """
-        Execute full or incremental data lineage analysis on the given repository.
+        Rebuild lineage from the shared bounded file inventory.
 
         Steps (full run):
           1. Detect if repo is a dbt project → parse dbt model DAG
@@ -167,21 +170,22 @@ class Hydrologist:
           5. Populate the knowledge graph with all discovered lineage
           6. Compute sources (in-degree=0) and sinks (out-degree=0)
 
-        When changed_files is provided (incremental): remove lineage for those files,
-        then re-analyze only those files (SQL, Python, DAG) and add new transformations.
-        dbt project-level parsing is not re-run in incremental (only file-level SQL/Python).
+        A changed-file hint is accepted for compatibility, but config and source
+        changes currently trigger a full lineage rebuild to preserve correctness.
 
         Args:
             repo_root: Absolute path to the repository root.
             knowledge_graph: Shared KnowledgeGraph to populate or update.
-            changed_files: If set, only these paths are re-analyzed; existing
-                transformations for these files are removed first.
+            changed_files: Compatibility hint; extraction is conservatively rebuilt.
 
         Returns:
             Summary dict with lineage statistics and key data assets.
         """
-        if changed_files is not None:
-            return self._run_incremental(repo_root, knowledge_graph, changed_files)
+        # Conservative invalidation: config/ref/deletion changes can affect
+        # unchanged files. Rebuild lineage until selective equivalence is proven.
+        knowledge_graph.clear_lineage()
+        self.inventory = inventory or scan_repository(repo_root)
+        self.diagnostics = []
 
         logger.info("Hydrologist: analyzing data flows in %s", repo_root)
         all_transformations, all_datasets, sql_count, py_count = (
@@ -198,14 +202,15 @@ class Hydrologist:
         sinks = self._find_sinks(lineage_subgraph)
 
         summary = {
-            "total_transformations": len(all_transformations),
-            "total_datasets": len(all_datasets),
+            "total_transformations": knowledge_graph.summary()["transformations"],
+            "total_datasets": knowledge_graph.summary()["datasets"],
             "sql_files_analyzed": sql_count,
             "python_files_scanned": py_count,
             "data_sources": sorted(sources),
             "data_sinks": sorted(sinks),
             "lineage_nodes": lineage_subgraph.number_of_nodes(),
             "lineage_edges": lineage_subgraph.number_of_edges(),
+            "diagnostics": self.diagnostics,
         }
         logger.info(
             "Hydrologist complete: %d transformations, %d sources, %d sinks",
@@ -225,38 +230,33 @@ class Hydrologist:
         dbt_project_file = repo_root / "dbt_project.yml"
         if dbt_project_file.exists():
             logger.info("Detected dbt project — parsing model DAG")
-            dbt_results = parse_dbt_project(repo_root)
+            dbt_results = parse_dbt_project(repo_root, source_files=self.inventory.files)
             all_transformations.extend(dbt_results["transformations"])
             all_datasets.extend(dbt_results["datasets"])
             for edge in dbt_results["config_edges"]:
                 knowledge_graph.add_configures_edge(edge.source, edge.target)
 
-        sql_files = [
-            f
-            for f in repo_root.rglob("*.sql")
-            if not any(
-                skip in f.parts
-                for skip in {".git", "node_modules", "__pycache__", ".venv"}
-            )
-        ]
+        dbt_files = {tx.source_file for tx in all_transformations}
+        sql_files = [f for f in self.inventory.files if f.suffix == ".sql"
+                     and f.relative_to(repo_root).as_posix() not in dbt_files]
         for sql_file in sql_files:
-            all_transformations.extend(analyze_sql_file(sql_file, repo_root))
+            try:
+                all_transformations.extend(analyze_sql_file(sql_file, repo_root))
+            except (ValueError, OSError) as exc:
+                self.diagnostics.append({"path": sql_file.relative_to(repo_root).as_posix(),
+                                         "error": str(exc), "incomplete": True})
         logger.info("Analyzed %d SQL files", len(sql_files))
 
-        py_files = [
-            f
-            for f in repo_root.rglob("*.py")
-            if not any(
-                skip in f.parts
-                for skip in {".git", "node_modules", "__pycache__", ".venv"}
-            )
-        ]
+        py_files = [f for f in self.inventory.files if f.suffix == ".py"]
         for py_file in py_files:
-            all_transformations.extend(_analyze_python_data_flow(py_file, repo_root))
+            try:
+                all_transformations.extend(_analyze_python_data_flow(py_file, repo_root))
+            except (ValueError, SyntaxError, OSError) as exc:
+                self.diagnostics.append({"path": py_file.relative_to(repo_root).as_posix(),
+                                         "error": str(exc), "incomplete": True})
 
-        dags_dir = repo_root / "dags"
-        if dags_dir.exists():
-            for dag_file in dags_dir.rglob("*.py"):
+        for dag_file in py_files:
+            if "dags" in dag_file.relative_to(repo_root).parts:
                 all_transformations.extend(parse_airflow_dag(dag_file, repo_root))
 
         return all_transformations, all_datasets, len(sql_files), len(py_files)
@@ -346,17 +346,17 @@ class Hydrologist:
             logger.warning("Node '%s' not found in graph", node_name)
             return []
 
-        visited: set[str] = set()
+        visited: set[str] = {node_name}
         queue: deque[str] = deque([node_name])
 
         while queue:
             current = queue.popleft()
-            for successor in knowledge_graph.graph.successors(current):
+            for successor, _ in knowledge_graph.impact_neighbors(current):
                 if successor not in visited:
                     visited.add(successor)
                     queue.append(successor)
 
-        return sorted(visited)
+        return sorted(visited - {node_name})
 
     @staticmethod
     def find_sources(knowledge_graph: KnowledgeGraph) -> list[str]:
@@ -411,12 +411,12 @@ class Hydrologist:
             logger.warning("Dataset '%s' not found in graph", dataset_name)
             return []
 
-        visited: set[str] = set()
+        visited: set[str] = {dataset_name}
         queue: deque[str] = deque([dataset_name])
 
         while queue:
             current = queue.popleft()
-            for predecessor in knowledge_graph.graph.predecessors(current):
+            for predecessor in knowledge_graph.lineage_neighbors(current, "upstream"):
                 if predecessor not in visited:
                     visited.add(predecessor)
                     queue.append(predecessor)
@@ -424,6 +424,6 @@ class Hydrologist:
         # Filter to only dataset nodes (exclude transformation nodes)
         return sorted(
             node
-            for node in visited
+            for node in visited - {dataset_name}
             if knowledge_graph.graph.nodes[node].get("node_type") == "dataset"
         )

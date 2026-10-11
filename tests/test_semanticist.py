@@ -8,8 +8,9 @@ using mock data that simulates real codebase analysis results.
 from __future__ import annotations
 
 import pytest
+import importlib.util
 
-from src.agents.semanticist import ContextWindowBudget, cluster_into_domains
+from brownfield_cartographer.agents.semanticist import ContextWindowBudget, cluster_into_domains
 
 
 # ---------------------------------------------------------------------------
@@ -52,6 +53,7 @@ class TestContextWindowBudget:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.skipif(importlib.util.find_spec("sklearn") is None, reason="Optional llm extra is not installed")
 class TestDomainClustering:
     """Validate TF-IDF + k-means domain clustering on sample purpose statements."""
 
@@ -160,4 +162,11 @@ class TestDomainClustering:
         """Empty input should return empty output."""
         result = cluster_into_domains({})
         assert result.assignments == {}
+
+    @pytest.mark.parametrize("count", [3, 5, 6])
+    def test_small_projects_have_valid_silhouette(self, count):
+        result = cluster_into_domains({f"module{i}.py": f"Processes domain{i} tables and statistics"
+                                       for i in range(count)})
+        score = result.quality_metrics["silhouette_score"]
+        assert score is None or -1 <= score <= 1
 

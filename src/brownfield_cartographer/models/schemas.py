@@ -87,6 +87,7 @@ class ModuleNode(BaseModel):
         default_factory=list,
         description="List of module paths this file imports",
     )
+    import_locations: dict[str, list[tuple[int, int]]] = Field(default_factory=dict)
     public_functions: list[str] = Field(
         default_factory=list,
         description="Names of public (non-underscore) functions defined here",

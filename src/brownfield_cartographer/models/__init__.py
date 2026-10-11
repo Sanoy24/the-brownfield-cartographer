@@ -1,4 +1,4 @@
-from src.models.schemas import (
+from brownfield_cartographer.models.schemas import (
     ModuleNode,
     DatasetNode,
     FunctionNode,
