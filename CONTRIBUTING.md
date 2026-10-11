@@ -44,8 +44,10 @@ configure remote protection or guarantee enforcement.
 ```sh
 uv sync --frozen
 uv run pytest
-uv run ruff check src tests
+uv run ruff check src tests scripts
 uv run mypy -p brownfield_cartographer.scanner -p brownfield_cartographer.persistence -p brownfield_cartographer.query_api --follow-imports=skip
+uv build
+uv run --no-sync python scripts/check_wheel.py
 ```
 
 The default installation runs without model adapters. Legacy LLM enrichment
@@ -53,3 +55,10 @@ dependencies are available through `uv sync --extra llm`; installing them does
 not opt the core into making model calls. Source fixtures should be small,
 deterministic, and runnable without network access or credentials. Test both
 extraction and queries, including evidence and incomplete-analysis behavior.
+
+The wheel check installs the built distribution and its core dependencies into
+a fresh temporary environment, then exercises the API and installed CLI from
+outside the source tree. It checks that optional model/MCP packages are absent,
+that local analysis works with network calls blocked in the API probe, and that
+missing MCP dependencies produce an actionable error. Installation may download
+dependencies; add `--offline` when the required packages are already cached.

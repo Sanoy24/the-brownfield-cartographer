@@ -129,9 +129,10 @@ dataset identifiers, artifact freshness, and scanner limits.
 ```sh
 uv sync --frozen
 uv run --no-sync pytest -q
-uv run --no-sync ruff check src tests
+uv run --no-sync ruff check src tests scripts
 uv run --no-sync mypy -p brownfield_cartographer.scanner -p brownfield_cartographer.persistence -p brownfield_cartographer.query_api --follow-imports=skip
 uv build
+uv run --no-sync python scripts/check_wheel.py
 ```
 
 Use short-lived `feat/`, `fix/`, `docs/`, and `chore/` branches and pull requests
