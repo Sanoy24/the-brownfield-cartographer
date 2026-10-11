@@ -2,6 +2,7 @@
 
 Run after `uv build`. No editable installation or source-tree imports are used.
 Use --offline to resolve dependencies only from the existing uv cache.
+Use --mcp to additionally install the MCP extra and check its stdio entry point.
 """
 from __future__ import annotations
 
@@ -93,10 +94,93 @@ print("Installed wheel: core API, CLI, dbt adapter, entry points, typing metadat
 '''
 
 
+MCP_PROBE = r'''
+import asyncio
+import importlib.util
+import json
+import os
+from pathlib import Path
+import sys
+
+from mcp import ClientSession, StdioServerParameters
+from mcp.client.stdio import stdio_client
+from brownfield_cartographer.query_api import QueryEngine
+
+for optional in ("langchain_core", "langgraph", "sklearn"):
+    assert importlib.util.find_spec(optional) is None, optional
+
+repo = Path.cwd() / "fixture"
+engine = QueryEngine.open(repo)
+entry = Path(sys.executable).parent / ("cartographer-mcp.exe" if sys.platform == "win32" else "cartographer-mcp")
+requests = {
+    "get_architecture": ({}, engine.get_architecture()),
+    "find_symbol": ({"pattern": "run"}, engine.find_symbol("run")),
+    "trace_dependencies": ({"target": "consumer.py"}, engine.trace_dependencies("consumer.py")),
+    "analyze_impact": ({"target": "producer.py"}, engine.analyze_impact("producer.py")),
+    "trace_data_lineage": ({"dataset": "analytics.orders"}, engine.trace_data_lineage("analytics.orders")),
+    "get_code_context": ({"path": "consumer.py", "start_line": 1, "end_line": 1}, engine.get_code_context("consumer.py", 1, 1)),
+}
+
+def files():
+    return {path.relative_to(repo): path.read_bytes() for path in repo.rglob("*") if path.is_file()}
+
+async def check():
+    before = files()
+    parameters = StdioServerParameters(command=str(entry), args=["--repo", str(repo)],
+        env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1", "PYTHONUTF8": "1"})
+    async with stdio_client(parameters) as (reader, writer):
+        async with ClientSession(reader, writer) as session:
+            await session.initialize()
+            listing = await session.list_tools()
+            assert {tool.name for tool in listing.tools} == set(requests)
+            for tool in listing.tools:
+                assert tool.annotations.readOnlyHint
+                assert not tool.annotations.destructiveHint
+                assert not tool.annotations.openWorldHint
+                assert tool.outputSchema is not None
+            for name, (arguments, expected) in requests.items():
+                print(f"Checking installed MCP tool: {name}", flush=True)
+                result = await session.call_tool(name, arguments)
+                if result.isError or result.structuredContent != expected:
+                    print(json.dumps({"tool": name, "actual": result.structuredContent,
+                                      "expected": expected, "errors": [item.model_dump() for item in result.content]},
+                                     default=str), file=sys.stderr, flush=True)
+                assert not result.isError, (name, result)
+                assert result.structuredContent == expected, name
+            for name, arguments in (
+                ("get_code_context", {"path": "../private.py"}),
+                ("get_architecture", {"limit": 0}),
+                ("trace_data_lineage", {"dataset": "analytics.orders", "direction": "sideways"}),
+            ):
+                assert (await session.call_tool(name, arguments)).isError, name
+            assert files() == before, "Read-only MCP tools modified repository/index files"
+
+            # Simulate an external failed run without replacing the graph.
+            summary = engine.index_dir / "analysis_summary.json"
+            original = summary.read_bytes()
+            try:
+                summary.write_text(json.dumps({"status": "failed"}), encoding="utf-8")
+                changed = files()
+                response = await session.call_tool("get_architecture", {})
+                assert not response.isError
+                assert response.structuredContent["status"] == "failed"
+                assert files() == changed, "Status refresh modified artifacts"
+            finally:
+                summary.write_bytes(original)
+            response = await session.call_tool("get_architecture", {})
+            assert response.structuredContent["status"] == "complete"
+    assert files() == before
+
+asyncio.run(asyncio.wait_for(check(), timeout=60))
+print("Installed MCP extra: six stdio tools match the API, reject invalid requests, refresh status and leave files unchanged.")
+'''
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--wheel", type=Path, help="Wheel to install; defaults to the current project version in dist/")
     parser.add_argument("--offline", action="store_true", help="Use only cached dependencies")
+    parser.add_argument("--mcp", action="store_true", help="Also validate the installed MCP extra over stdio")
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
     project = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))["project"]
@@ -124,6 +208,11 @@ def main() -> None:
         probe = work / "probe.py"
         probe.write_text(PROBE, encoding="utf-8")
         run([str(python), "-I", "-X", "utf8", str(probe), project["version"]])
+        if args.mcp:
+            requirement = f"{project['name']}[mcp] @ {wheel.as_uri()}"
+            run([*uv, "pip", "install", "--strict", "--python", str(python), requirement])
+            probe.write_text(MCP_PROBE, encoding="utf-8")
+            run([str(python), "-I", "-X", "utf8", str(probe)])
 
 
 if __name__ == "__main__":

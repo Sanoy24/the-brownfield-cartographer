@@ -48,6 +48,7 @@ uv run ruff check src tests scripts
 uv run mypy -p brownfield_cartographer.scanner -p brownfield_cartographer.persistence -p brownfield_cartographer.query_api --follow-imports=skip
 uv build
 uv run --no-sync python scripts/check_wheel.py
+uv run --no-sync python scripts/check_wheel.py --mcp
 ```
 
 The default installation runs without model adapters. Legacy LLM enrichment
@@ -62,3 +63,7 @@ outside the source tree. It checks that optional model/MCP packages are absent,
 that local analysis works with network calls blocked in the API probe, and that
 missing MCP dependencies produce an actionable error. Installation may download
 dependencies; add `--offline` when the required packages are already cached.
+The `--mcp` check first validates the core without extras, then installs the MCP
+extra into the same isolated environment. It exercises all six tools through
+the installed stdio entry point, compares structured results with the Python
+API, checks rejected requests and status refresh, and verifies no tool writes.

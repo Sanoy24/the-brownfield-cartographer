@@ -19,7 +19,8 @@ Using that interpreter avoids package downloads or environment resolution when
 the host starts the server.
 
 With a custom analysis output root, append `--index-dir` followed by the exact
-`<output-root>/.cartography/<repository-name>` directory. The server validates
+`artifact_directory` reported by analysis JSON. Local custom outputs include
+a checkout-path hash to distinguish same-named repositories. The server validates
 that the index belongs to the configured repository. Tool arguments cannot
 select a different repository. Re-run `analyze` after edits; a running server
 observes newly published indexes. Source excerpts reject stale content or
@@ -58,6 +59,33 @@ tool_timeout_sec = 60
 
 Use `codex mcp list` to inspect registration. These fields and the CLI command
 are documented in the [official OpenAI MCP documentation](https://developers.openai.com/codex/mcp/).
+
+For a session-only check that leaves your global and project settings untouched,
+use the repository helper from the Cartographer checkout:
+
+```sh
+uv sync --frozen --extra mcp
+uv run --no-sync cartographer analyze examples/sample_repo
+uv run --no-sync python scripts/check_codex_config.py --repo examples/sample_repo
+uv run --no-sync python scripts/check_codex_config.py --repo examples/sample_repo --launch
+```
+
+The check validates the saved repository scope and confirms that the installed
+Codex CLI accepts stdio configuration overrides. `--launch` opens an interactive
+session using those overrides. Pass `--index-dir` for a custom artifact directory.
+This requires a Codex CLI on PATH; launching a session uses your normal host
+authentication and model configuration. The configuration check alone does not
+exercise a model or establish that Codex called a Cartographer tool.
+
+In the session, inspect `/mcp`, then ask:
+
+> Use the brownfield_smoke MCP tools to find normalize_name, report the potential
+> impact of changing producer.py, and trace analytics.customer_totals upstream.
+> Include file/line evidence and coverage limitations. Do not edit files.
+
+Verify that the tool calls appear in the session, impact includes `consumer.py`,
+and lineage reaches `analytics.orders` and `raw.orders`. This is the manual host
+acceptance check; SDK protocol tests do not substitute for it.
 
 ## Cursor
 
@@ -107,3 +135,17 @@ checks structured results, rejects an out-of-scope path, and verifies that the
 repository/index files remain unchanged. This verifies protocol integration;
 an interactive session in Claude Code, Codex, or Cursor has not been exercised
 by that test. No host settings are installed automatically.
+
+To validate the built distribution as well as the source checkout:
+
+```sh
+uv build
+uv run --no-sync python scripts/check_wheel.py --mcp
+```
+
+This installs the wheel into a fresh environment, verifies the core without
+optional packages, then installs the MCP extra and exercises the installed
+`cartographer-mcp` entry point. All six tools must match the shared Python API;
+invalid paths/arguments must be rejected, run-status changes must be observed,
+and tool calls must leave repository/index files unchanged. This checks SDK
+protocol interoperability; it does not establish an interactive host session.
