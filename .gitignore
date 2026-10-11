@@ -209,4 +209,5 @@ __marimo__/
 # Routine generated analysis (tracked historical examples remain tracked)
 .cartography/
 guide.md
-docs/
+/docs/FOUNDATION_MILESTONE.md
+/docs/OPEN_SOURCE_REVIEW.md
