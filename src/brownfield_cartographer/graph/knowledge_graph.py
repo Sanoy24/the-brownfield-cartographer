@@ -80,9 +80,6 @@ class KnowledgeGraph:
         )
         if transformation.source_file not in self.graph:
             self.add_module_node(ModuleNode(path=transformation.source_file))
-        self.graph.add_edge(transformation.source_file, tx_id, edge_type="DEFINES",
-                            source_file=transformation.source_file,
-                            line_range=list(transformation.line_range), confidence="static")
         heuristic = transformation.transformation_type.value in {"python_transform", "config_pipeline"}
         evidence = {"source_file": transformation.source_file,
                     "line_range": list(transformation.line_range),
@@ -90,6 +87,7 @@ class KnowledgeGraph:
                     "analysis_method": transformation.analysis_method or ("scope_heuristic" if heuristic else "sql_or_dbt_reference")}
         if transformation.artifact_file is not None:
             evidence.update(artifact_file=transformation.artifact_file, resource_id=transformation.resource_id)
+        self.graph.add_edge(transformation.source_file, tx_id, edge_type="DEFINES", **evidence)
         self.graph.nodes[tx_id].update(evidence)
 
         # Create CONSUMES edges (source datasets → transformation)

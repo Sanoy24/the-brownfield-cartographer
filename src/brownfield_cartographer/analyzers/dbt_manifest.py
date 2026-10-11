@@ -55,6 +55,8 @@ def parse_dbt_manifest(content: str, artifact_path: str) -> dict[str, Any]:
             if not isinstance(node, dict):
                 raise ValueError("dbt resources must be objects")
             kind = node.get("resource_type")
+            if not isinstance(kind, str):
+                raise ValueError("dbt resources must declare a resource type")
             if kind not in DATASET_TYPES:
                 continue
             if (not unique_id or len(unique_id) > 1000 or node.get("unique_id") != unique_id

@@ -18,6 +18,7 @@ from typing import Any
 import networkx as nx
 
 from brownfield_cartographer.analyzers.dag_config_parser import parse_airflow_dag, parse_dbt_project
+from brownfield_cartographer.analyzers.dbt_manifest import parse_dbt_manifest
 from brownfield_cartographer.analyzers.sql_lineage import analyze_sql_file, analyze_sql_string
 from brownfield_cartographer.graph.knowledge_graph import KnowledgeGraph
 from brownfield_cartographer.scanner import ScanResult, scan_repository
@@ -186,6 +187,7 @@ class Hydrologist:
         knowledge_graph.clear_lineage()
         self.inventory = inventory or scan_repository(repo_root)
         self.diagnostics = []
+        self.dbt_mode = "none"
 
         logger.info("Hydrologist: analyzing data flows in %s", repo_root)
         all_transformations, all_datasets, sql_count, py_count = (
@@ -211,6 +213,7 @@ class Hydrologist:
             "lineage_nodes": lineage_subgraph.number_of_nodes(),
             "lineage_edges": lineage_subgraph.number_of_edges(),
             "diagnostics": self.diagnostics,
+            "dbt_mode": self.dbt_mode,
         }
         logger.info(
             "Hydrologist complete: %d transformations, %d sources, %d sinks",
@@ -227,16 +230,34 @@ class Hydrologist:
         all_transformations: list[TransformationNode] = []
         all_datasets: list[DatasetNode] = []
 
+        dbt_files = set()
+        manifest = self.inventory.dbt_manifest
         dbt_project_file = repo_root / "dbt_project.yml"
-        if dbt_project_file.exists():
+        if manifest is not None:
+            self.dbt_mode = "manifest_v12"
+            try:
+                if self.inventory.dbt_manifest_content is None:
+                    raise ValueError("Selected dbt manifest could not be safely scanned")
+                dbt_results = parse_dbt_manifest(
+                    self.inventory.dbt_manifest_content, manifest.relative_to(repo_root).as_posix(),
+                )
+                all_transformations.extend(dbt_results["transformations"])
+                all_datasets.extend(dbt_results["datasets"])
+                self.diagnostics.extend(dbt_results["diagnostics"])
+                dbt_files.update(dbt_results["definition_files"])
+            except (ValueError, TypeError, KeyError) as exc:
+                self.diagnostics.append({"path": manifest.relative_to(repo_root).as_posix(),
+                                         "error": str(exc), "incomplete": True})
+        elif dbt_project_file in self.inventory.files:
+            self.dbt_mode = "source_fallback"
             logger.info("Detected dbt project — parsing model DAG")
             dbt_results = parse_dbt_project(repo_root, source_files=self.inventory.files)
             all_transformations.extend(dbt_results["transformations"])
             all_datasets.extend(dbt_results["datasets"])
+            dbt_files.update(tx.source_file for tx in dbt_results["transformations"])
             for edge in dbt_results["config_edges"]:
                 knowledge_graph.add_configures_edge(edge.source, edge.target)
 
-        dbt_files = {tx.source_file for tx in all_transformations}
         sql_files = [f for f in self.inventory.files if f.suffix == ".sql"
                      and f.relative_to(repo_root).as_posix() not in dbt_files]
         for sql_file in sql_files:

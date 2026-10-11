@@ -24,7 +24,7 @@ from brownfield_cartographer.scanner import ScanResult, ScanSettings, scan_repos
 
 logger = logging.getLogger(__name__)
 console = Console()
-ANALYSIS_VERSION = 3
+ANALYSIS_VERSION = 4
 
 
 def _is_github_url(value: str) -> bool:
@@ -167,6 +167,7 @@ class Orchestrator:
             results["scan"] = final_inventory.report()
             self.knowledge_graph.graph.graph["repository"] = str(repo_root)
             self.knowledge_graph.graph.graph["snapshot"] = inventory.fingerprints
+            self.knowledge_graph.graph.graph["scan_settings"] = vars(self.scan_settings)
             incomplete_stages = any(d.get("incomplete") for name in ("surveyor", "hydrologist")
                                     for d in results[name].get("diagnostics", []))
             self.knowledge_graph.graph.graph["coverage"] = {

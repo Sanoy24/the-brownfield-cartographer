@@ -23,6 +23,7 @@ from rich.table import Table
 
 from brownfield_cartographer.orchestrator import Orchestrator
 from brownfield_cartographer.query_api import QueryEngine
+from brownfield_cartographer.scanner import ScanSettings
 
 # Load environment variables from .env file
 load_dotenv()
@@ -80,6 +81,9 @@ def analyze(
     ),
     full: bool = typer.Option(False, "--full", help="Rebuild even when the snapshot is unchanged"),
     as_json: bool = typer.Option(False, "--json", help="Return structured run results on stdout"),
+    dbt_manifest: str | None = typer.Option(
+        None, "--dbt-manifest", help="Repository-relative dbt v12 JSON artifact; explicitly overrides ignore rules for this file",
+    ),
 ) -> None:
     """
     Analyze a codebase and generate cartography artifacts.
@@ -91,9 +95,9 @@ def analyze(
     _setup_logging(verbose)
 
     output_dir = Path(output) if output else None
-    orchestrator = Orchestrator()
-
+    orchestrator = None
     try:
+        orchestrator = Orchestrator(scan_settings=ScanSettings(dbt_manifest=dbt_manifest))
         if as_json:
             with redirect_stdout(sys.stderr):
                 results = orchestrator.run(repo, output_dir=output_dir, full=full)
@@ -104,14 +108,15 @@ def analyze(
             raise typer.Exit(code=2)
     except typer.Exit:
         raise
-    except FileNotFoundError as exc:
-        console.print(f"[bold red]Error:[/bold red] {exc}")
-        raise typer.Exit(code=1)
     except (RuntimeError, ValueError, OSError) as exc:
-        console.print(f"[bold red]Error:[/bold red] {exc}")
+        if as_json:
+            typer.echo(json.dumps({"status": "failed", "error": str(exc)}))
+        else:
+            console.print(f"[bold red]Error:[/bold red] {exc}")
         raise typer.Exit(code=1)
     finally:
-        orchestrator.cleanup()
+        if orchestrator is not None:
+            orchestrator.cleanup()
 
 
 @app.command()

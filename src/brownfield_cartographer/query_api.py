@@ -263,8 +263,12 @@ class QueryEngine:
         expected = self.snapshot.get(relative.as_posix())
         if expected is None or self.graph.graph.nodes.get(relative.as_posix(), {}).get("node_type") != "module":
             raise QueryError("Path is not an indexed source file")
-        from brownfield_cartographer.scanner import scan_repository
-        current = scan_repository(self.repo_root)
+        from brownfield_cartographer.scanner import ScanSettings, scan_repository
+        try:
+            settings = ScanSettings(**self.graph.graph.graph.get("scan_settings", {}))
+        except (ValueError, TypeError) as exc:
+            raise QueryError("Invalid indexed scanner settings; analyze it again") from exc
+        current = scan_repository(self.repo_root, settings)
         if current.fingerprints != self.snapshot:
             raise QueryError("Repository or ignore policy changed since indexing; analyze it again")
         if candidate.stat().st_size > 2 * 1024 * 1024:

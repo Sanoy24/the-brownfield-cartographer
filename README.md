@@ -22,6 +22,9 @@ uv run cartographer analyze /path/to/repository
 
 # Force a fresh rebuild or choose an output root.
 uv run cartographer analyze /path/to/repository --full -o ./results
+
+# Optional: use a previously generated dbt v12 manifest.
+uv run cartographer analyze /path/to/dbt-project --dbt-manifest target/manifest.json
 ```
 
 An explicit GitHub URL input still downloads a checkout:
@@ -107,7 +110,7 @@ unchanged successful snapshots can reuse the complete index.
 | --- | --- |
 | Python | Functions/classes, supported absolute/relative imports; conservative literal I/O associations |
 | SQL | SELECT/UNION, CTAS and INSERT queries; statement spans and table dependencies |
-| dbt SQL/YAML | Basic source `ref`/`source` parsing and configured model paths; manifest adapter planned |
+| dbt | Explicit manifest v12 ingestion for models, seeds, snapshots and sources; basic SQL/YAML fallback without a manifest |
 | Airflow | Experimental, limited task dependency regex |
 | JavaScript/TypeScript | File metadata only; unsupported structure explicitly listed |
 
@@ -117,6 +120,9 @@ total bytes, file count, entry count and traversal depth. Conventional secret
 filenames are excluded; secrets embedded in normal source are not detected.
 Large, binary, unreadable or unsupported files are reported rather than treated
 as fully analyzed. No repository source code is executed by local analysis.
+
+See [dbt artifact ingestion](docs/DBT.md) for supported manifest versions,
+dataset identifiers, artifact freshness, and scanner limits.
 
 ## Development and branching
 
