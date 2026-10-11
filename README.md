@@ -5,9 +5,8 @@ dependency impact, and data lineage. The Python API, deterministic CLI, and
 read-only local MCP server share one query engine; reasoning belongs to the
 developer's existing AI assistant.
 
-The current branch implements the local analysis foundation.
-The CLI includes `analyze`, `overview`, `find`, `impact`, and `lineage`. See the
-[milestone notes](docs/FOUNDATION_MILESTONE.md) for scope and remaining limits.
+The CLI includes `analyze`, `overview`, `find`, `impact`, and `lineage`.
+The support table below describes current capabilities and limitations.
 
 ## Install and analyze
 
@@ -38,9 +37,15 @@ deterministic default workflow.
 
 ## Outputs and queries
 
-Artifacts are written under `<output-root>/.cartography/<repository-name>/`.
-For a local checkout, the default output root is that checkout. GitHub URL
-inputs use the current directory and an `owner--repository` folder name.
+For a local checkout, artifacts default to
+`<repository>/.cartography/<repository-name>/`. With an explicit `--output`,
+local repositories use `<output-root>/.cartography/<repository-name>--<path-hash>/`
+so same-named checkouts do not overwrite one another. The hash identifies the
+resolved checkout path; moving a checkout creates a separate index. The JSON
+analysis result includes `artifact_directory`, which can be passed to query
+commands as `--index-dir`. Existing custom-output indexes are left untouched;
+reanalyzing writes to the new directory. GitHub URL inputs use the current
+directory by default and an `owner--repository` folder name.
 
 | Artifact | Purpose |
 | --- | --- |

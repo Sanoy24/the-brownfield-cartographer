@@ -2,8 +2,10 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import hashlib
 import json
 import logging
+import os
 from pathlib import Path
 import subprocess
 import tempfile
@@ -31,13 +33,18 @@ def _is_github_url(value: str) -> bool:
             and parsed.username is None and parsed.port is None)
 
 
-def _derive_repo_name(value: str) -> str:
+def _derive_repo_name(value: str, *, isolate_local: bool = False) -> str:
     if _is_github_url(value):
         parts = urlparse(value).path.strip("/").removesuffix(".git").split("/")
         if len(parts) != 2 or any(not p or p in {".", ".."} for p in parts):
             raise ValueError("Use a canonical https://github.com/owner/repository URL")
         return "--".join(parts)
-    return Path(value).resolve().name
+    path = Path(value).resolve()
+    if isolate_local:
+        identity = os.path.normcase(str(path))
+        digest = hashlib.sha256(identity.encode("utf-8")).hexdigest()[:16]
+        return f"{path.name}--{digest}"
+    return path.name
 
 
 def _clone_repo(url: str, target_dir: Path) -> Path:
@@ -111,7 +118,9 @@ class Orchestrator:
         repo_root = self._resolve_repo(repo_input)
         inventory = scan_repository(repo_root, self.scan_settings)
         root = output_dir if output_dir is not None else (Path.cwd() if _is_github_url(repo_input) else repo_root)
-        artifacts = _artifact_directory(root, _derive_repo_name(repo_input))
+        artifacts = _artifact_directory(root, _derive_repo_name(
+            repo_input, isolate_local=output_dir is not None,
+        ))
         trace = self.archivist.init_trace(artifacts)
         trace.log(agent="orchestrator", action="pipeline_started",
                   details={"repo_root": str(repo_root), "scan": inventory.report()})
@@ -129,6 +138,7 @@ class Orchestrator:
 
         self.knowledge_graph.clear()
         results: dict[str, Any] = {"scan": inventory.report(), "run_mode": "full_rebuild",
+                                   "artifact_directory": str(artifacts.resolve()),
                                    "changed_files": sorted(changed) if changed is not None else None}
         errors = {}
         semantic = {"purpose_statements": {}, "doc_drift_flags": {}, "domain_clusters": {},

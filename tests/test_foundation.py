@@ -184,13 +184,14 @@ def test_incomplete_scan_and_bad_file_do_not_checkpoint(tmp_path):
     out = tmp_path / "output"
     result = Orchestrator().run(str(repo), output_dir=out)
     assert result["status"] == "partial"
-    assert "ok.py" in KnowledgeGraph.from_artifacts(out / ".cartography" / "repo").graph
-    assert not (out / ".cartography" / "repo" / "state.json").exists()
+    artifacts = Path(result["artifact_directory"])
+    assert "ok.py" in KnowledgeGraph.from_artifacts(artifacts).graph
+    assert not (artifacts / "state.json").exists()
     (repo / "bad.py").unlink()
     (repo / "big.py").write_text("x" * 101)
     result = Orchestrator(scan_settings=ScanSettings(max_file_bytes=100)).run(str(repo), output_dir=out)
     assert result["status"] == "partial"
-    assert not (out / ".cartography" / "repo" / "state.json").exists()
+    assert not (artifacts / "state.json").exists()
 
 
 def test_unchanged_run_preserves_history_and_loads_full_graph(tmp_path):
@@ -264,7 +265,7 @@ def test_pipeline_offline_changes_and_failed_checkpoint(tmp_path, monkeypatch):
     output = tmp_path / "output"
     first = Orchestrator().run(str(repo), output_dir=output)
     assert first["status"] == "complete"
-    artifacts = output / ".cartography" / "repo"
+    artifacts = Path(first["artifact_directory"])
     before = (artifacts / "state.json").read_bytes()
     (repo / "a.py").write_text("def run():\n    return 2\n")
     runner = Orchestrator()
