@@ -205,3 +205,6 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# Routine generated analysis (tracked historical examples remain tracked)
+.cartography/
