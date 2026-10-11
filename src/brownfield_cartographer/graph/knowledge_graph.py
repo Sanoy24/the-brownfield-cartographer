@@ -86,8 +86,10 @@ class KnowledgeGraph:
         heuristic = transformation.transformation_type.value in {"python_transform", "config_pipeline"}
         evidence = {"source_file": transformation.source_file,
                     "line_range": list(transformation.line_range),
-                    "confidence": "inferred" if heuristic else "syntax",
-                    "analysis_method": "scope_heuristic" if heuristic else "sql_or_dbt_reference"}
+                    "confidence": transformation.confidence or ("inferred" if heuristic else "syntax"),
+                    "analysis_method": transformation.analysis_method or ("scope_heuristic" if heuristic else "sql_or_dbt_reference")}
+        if transformation.artifact_file is not None:
+            evidence.update(artifact_file=transformation.artifact_file, resource_id=transformation.resource_id)
         self.graph.nodes[tx_id].update(evidence)
 
         # Create CONSUMES edges (source datasets → transformation)

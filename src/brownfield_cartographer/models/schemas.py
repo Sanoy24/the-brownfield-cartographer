@@ -120,6 +120,8 @@ class DatasetNode(BaseModel):
     freshness_sla: Optional[str] = Field(default=None)
     owner: Optional[str] = Field(default=None)
     is_source_of_truth: bool = Field(default=False)
+    dbt_unique_id: Optional[str] = Field(default=None)
+    relation_name: Optional[str] = Field(default=None)
 
 
 class FunctionNode(BaseModel):
@@ -166,6 +168,10 @@ class TransformationNode(BaseModel):
         description="(start_line, end_line) in the source file",
     )
     sql_query_if_applicable: Optional[str] = Field(default=None)
+    analysis_method: Optional[str] = Field(default=None)
+    confidence: Optional[str] = Field(default=None)
+    artifact_file: Optional[str] = Field(default=None)
+    resource_id: Optional[str] = Field(default=None)
 
 
 # ---------------------------------------------------------------------------

@@ -145,9 +145,14 @@ class QueryEngine:
         span = attrs.get("line_range")
         if span is None and attrs.get("line_start", 0):
             span = [attrs["line_start"], attrs.get("line_end", attrs["line_start"])]
-        return {"path": path, "line_range": span, "location_available": bool(path and span),
+        located = bool(path and isinstance(span, (list, tuple)) and len(span) == 2
+                       and span[0] > 0 and span[1] >= span[0])
+        evidence = {"path": path, "line_range": span if located else None, "location_available": located,
                 "method": attrs.get("analysis_method", "static_structure"),
                 "confidence": attrs.get("confidence", "syntax"), "snapshot_id": self.snapshot_id}
+        if attrs.get("artifact_file"):
+            evidence.update(artifact_file=attrs["artifact_file"], resource_id=attrs.get("resource_id"))
+        return evidence
 
     def get_architecture(self, limit: int = 50) -> dict[str, Any]:
         self._refresh()
