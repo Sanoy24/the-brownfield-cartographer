@@ -28,6 +28,9 @@ def test_read_only_stdio_tools(tmp_path):
                     "get_architecture", "find_symbol", "trace_dependencies", "analyze_impact",
                     "trace_data_lineage", "get_code_context"}
                 assert all(t.annotations.readOnlyHint and not t.annotations.openWorldHint for t in listing.tools)
+                architecture = await session.call_tool("get_architecture", {})
+                assert not architecture.isError
+                assert architecture.structuredContent["data"]["counts"]["modules"] == 1
                 response = await session.call_tool("find_symbol", {"pattern": "run"})
                 assert not response.isError
                 assert response.structuredContent["data"]["matches"][0]["id"] == "source.py::run"

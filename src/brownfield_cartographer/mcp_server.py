@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import importlib
 from pathlib import Path
 
 from brownfield_cartographer.query_api import QueryEngine
@@ -39,7 +40,12 @@ def main() -> None:
     parser.add_argument("--index-dir", type=Path, help="Explicit artifact directory for a custom output root")
     args = parser.parse_args()
     try:
-        create_server(args.repo, args.index_dir).run(transport="stdio")
+        server = create_server(args.repo, args.index_dir)
+        # Native ranking modules must initialize before stdio reader threads.
+        # Loading NumPy during a request can block on Windows native startup.
+        importlib.import_module("numpy")
+        importlib.import_module("scipy.sparse")
+        server.run(transport="stdio")
     except (ValueError, OSError, RuntimeError) as exc:
         parser.exit(1, f"cartographer-mcp: {exc}\n")
 
