@@ -14,6 +14,14 @@ class QueryError(ValueError):
     """Invalid scope, unsupported argument, ambiguous target, or stale source."""
 
 
+def _artifact_stamp(path: Path) -> tuple[int, int, int, int] | None:
+    try:
+        stat = path.lstat()
+        return stat.st_ino, stat.st_mtime_ns, stat.st_size, stat.st_mode
+    except FileNotFoundError:
+        return None
+
+
 class QueryEngine:
     MAX_RESULTS = 200
     MAX_DEPTH = 20
@@ -30,10 +38,20 @@ class QueryEngine:
         self.snapshot = graph.graph.graph.get("snapshot", {})
         self.snapshot_id = hashlib.sha256(json.dumps(self.snapshot, sort_keys=True).encode()).hexdigest()
         self.index_dir: Path | None = None
-        self.index_stamp = 0
+        self.index_stamp: tuple[int, int, int, int] | None = None
+        self.summary_stamp: tuple[int, int, int, int] | None = None
 
     @classmethod
     def open(cls, repo_root: Path, index_dir: Path | None = None) -> "QueryEngine":
+        try:
+            return cls._open(repo_root, index_dir)
+        except QueryError:
+            raise
+        except (OSError, ValueError, TypeError, KeyError, AttributeError) as exc:
+            raise QueryError("Cannot read analysis artifacts; run cartographer analyze again") from exc
+
+    @classmethod
+    def _open(cls, repo_root: Path, index_dir: Path | None = None) -> "QueryEngine":
         if repo_root.is_symlink() or repo_root.is_junction():
             raise QueryError("Repository root must not be a symlink or junction")
         repo_root = repo_root.resolve(strict=True)
@@ -51,21 +69,41 @@ class QueryEngine:
         if summary_path.exists():
             if summary_path.is_symlink() or summary_path.stat().st_size > 2 * 1024 * 1024:
                 raise QueryError("Invalid run summary")
-            status = json.loads(summary_path.read_text(encoding="utf-8")).get("status", "unknown")
+            summary = json.loads(summary_path.read_text(encoding="utf-8"))
+            if not isinstance(summary, dict):
+                raise QueryError("Invalid run summary; run cartographer analyze again")
+            status = summary.get("status", "unknown")
+            if status not in {"unknown", "complete", "partial", "failed", "no_changes"}:
+                raise QueryError("Invalid run summary status; run cartographer analyze again")
         graph = KnowledgeGraph.from_artifacts(index_dir)
         graph_status = graph.graph.graph.get("run_status", "unknown")
-        if graph_status in {"partial", "failed"}:
-            status = graph_status
+        for severity in ("failed", "partial"):
+            if severity in (status, graph_status):
+                status = severity
+                break
+        else:
+            if status == "unknown":
+                status = graph_status
         engine = cls(graph, repo_root, run_status=status)
         engine.index_dir = index_dir
-        engine.index_stamp = index_path.stat().st_mtime_ns
+        engine.index_stamp = _artifact_stamp(index_path)
+        engine.summary_stamp = _artifact_stamp(summary_path)
         return engine
 
     def _refresh(self) -> None:
-        """Observe a newly published index without writing or running analysis."""
-        if self.index_dir is not None and (self.index_dir / "index.json").stat().st_mtime_ns != self.index_stamp:
-            fresh = type(self).open(self.repo_root, self.index_dir)
-            self.__dict__.update(fresh.__dict__)
+        """Observe graph and run-status changes without writing or analyzing."""
+        if self.index_dir is None:
+            return
+        try:
+            changed = (
+                _artifact_stamp(self.index_dir / "index.json") != self.index_stamp
+                or _artifact_stamp(self.index_dir / "analysis_summary.json") != self.summary_stamp
+            )
+            if changed:
+                fresh = type(self).open(self.repo_root, self.index_dir)
+                self.__dict__.update(fresh.__dict__)
+        except OSError as exc:
+            raise QueryError("Cannot read analysis artifacts; run cartographer analyze again") from exc
 
     def _limit(self, value: int) -> int:
         if not 1 <= value <= self.MAX_RESULTS:

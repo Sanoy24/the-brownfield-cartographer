@@ -93,6 +93,9 @@ locations and server status controls.
 Responses include `schema_version`, `snapshot_id`, `status`, `coverage`,
 `truncated`, and `data`. Available evidence carries source paths, spans,
 extraction methods, and confidence labels. Missing locations remain unknown.
+The server observes index and run-summary changes between queries. A failed
+analysis is reported even if the previous index remains available; malformed
+or removed artifacts produce tool errors instead of serving a cached graph.
 Maximum output is 64 KB; result counts are capped at 200 and traversal depth at
 20. Code excerpts contain at most 200 lines/32 KB. Ambiguous names and invalid
 arguments produce tool errors, rather than choosing an arbitrary match.

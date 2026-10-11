@@ -1,5 +1,6 @@
 """The Python API and CLI must expose identical deterministic facts."""
 import json
+from pathlib import Path
 
 import pytest
 from typer.testing import CliRunner
@@ -75,6 +76,49 @@ def test_query_engine_observes_newly_analyzed_snapshot(indexed_repo):
     Orchestrator().run(str(indexed_repo))
     assert engine.get_code_context("producer.py")["data"]["content"] == "VALUE=2"
     assert engine.snapshot_id != old_snapshot
+
+
+def test_existing_engine_observes_failed_run_without_new_index(indexed_repo, monkeypatch):
+    engine = QueryEngine.open(indexed_repo)
+    index = Path(engine.index_dir) / "index.json"
+    original = index.read_bytes()
+    runner = Orchestrator()
+    def fail(*args):
+        raise OSError("controlled index publication failure")
+    monkeypatch.setattr(runner.knowledge_graph, "serialize_index", fail)
+    with pytest.raises(OSError, match="publication failure"):
+        runner.run(str(indexed_repo), full=True)
+    assert index.read_bytes() == original
+    assert engine.get_architecture()["status"] == "failed"
+    assert engine.find_symbol("run")["status"] == "failed"
+    Orchestrator().run(str(indexed_repo), full=True)
+    assert engine.get_architecture()["status"] == "complete"
+
+
+@pytest.mark.parametrize("content", ["[]", "{", '{"status": "invalid"}'])
+def test_invalid_summary_is_a_query_error(indexed_repo, content):
+    engine = QueryEngine.open(indexed_repo)
+    (Path(engine.index_dir) / "analysis_summary.json").write_text(content)
+    with pytest.raises(QueryError):
+        engine.get_architecture()
+    result = CliRunner().invoke(app, ["overview", str(indexed_repo), "--json"])
+    assert result.exit_code == 1
+    assert "error" in json.loads(result.stdout)
+
+
+@pytest.mark.parametrize("content", ["[]", "{", '{"schema_version": 1, "graph": {}}'])
+def test_invalid_index_is_a_query_error(indexed_repo, content):
+    engine = QueryEngine.open(indexed_repo)
+    (Path(engine.index_dir) / "index.json").write_text(content)
+    with pytest.raises(QueryError):
+        engine.find_symbol("run")
+
+
+def test_removed_index_is_not_served_from_memory(indexed_repo):
+    engine = QueryEngine.open(indexed_repo)
+    (Path(engine.index_dir) / "index.json").unlink()
+    with pytest.raises(QueryError, match="No versioned index"):
+        engine.get_architecture()
 
 
 def test_bounds_and_directions(indexed_repo):
