@@ -39,7 +39,7 @@ dependencies = [
     "networkx>=3.3",
     "rich>=13.0",
     "PyYAML>=6.0",
-    "pathspec>=0.12,<1",
+    "pathspec>=0.12,<2",
     # Static analysis
     "tree-sitter>=0.23",
     "tree-sitter-python>=0.23",
