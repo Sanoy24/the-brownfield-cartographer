@@ -15,6 +15,7 @@ from pathlib import Path
 import tree_sitter_python as tspython
 from tree_sitter import Language, Node, Parser, Query, QueryCursor
 
+from brownfield_cartographer.analyzers import javascript_analyzer
 from brownfield_cartographer.models.schemas import (
     FunctionNode,
     ModuleNode,
@@ -36,8 +37,8 @@ EXTENSION_MAP: dict[str, LangEnum] = {
     ".sql": LangEnum.SQL,
     ".yml": LangEnum.YAML,
     ".yaml": LangEnum.YAML,
-    ".js": LangEnum.JAVASCRIPT,
-    ".ts": LangEnum.TYPESCRIPT,
+    **dict.fromkeys(javascript_analyzer.JS_EXTENSIONS, LangEnum.JAVASCRIPT),
+    **dict.fromkeys(javascript_analyzer.TS_EXTENSIONS, LangEnum.TYPESCRIPT),
 }
 
 
@@ -236,8 +237,9 @@ def analyze_module(file_path: Path, repo_root: Path) -> ModuleNode | None:
     """
     Perform full structural analysis on a single source file.
 
-    Uses tree-sitter for Python files to extract imports, functions,
-    classes, and complexity metrics. Non-Python files get basic metadata.
+    Uses tree-sitter for Python, JavaScript and TypeScript files to extract
+    imports, functions, classes, and complexity metrics. Other files get basic
+    metadata.
 
     Args:
         file_path: Absolute path to the source file.
@@ -301,6 +303,11 @@ def analyze_module(file_path: Path, repo_root: Path) -> ModuleNode | None:
                 if fn.is_public_api
             ]
             module.complexity_score = _compute_complexity(root, lines_of_code)
+    elif lang in {LangEnum.JAVASCRIPT, LangEnum.TYPESCRIPT}:
+        try:
+            javascript_analyzer.analyze(module, source_bytes, file_path.suffix.lower())
+        except ValueError as exc:
+            raise ValueError(f"{exc} in {relative_path}") from exc
 
     return module
 
@@ -309,14 +316,14 @@ def extract_functions_from_file(
     file_path: Path, repo_root: Path
 ) -> list[FunctionNode]:
     """
-    Extract all function definitions from a Python file.
+    Extract all function definitions from a Python, JavaScript or TypeScript file.
 
     Separate from analyze_module to allow fine-grained call-graph analysis.
     """
     relative_path = str(file_path.relative_to(repo_root)).replace("\\", "/")
     lang = detect_language(file_path)
 
-    if lang != LangEnum.PYTHON:
+    if lang not in {LangEnum.PYTHON, LangEnum.JAVASCRIPT, LangEnum.TYPESCRIPT}:
         return []
 
     try:
@@ -324,6 +331,10 @@ def extract_functions_from_file(
     except OSError as exc:
         logger.warning("Cannot read %s: %s", relative_path, exc)
         return []
+
+    if lang != LangEnum.PYTHON:
+        module = ModuleNode(path=relative_path, language=lang)
+        return javascript_analyzer.analyze(module, source_bytes, file_path.suffix.lower())
 
     parser = get_parser(lang)
     if not parser:

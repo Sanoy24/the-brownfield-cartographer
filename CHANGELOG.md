@@ -12,6 +12,14 @@ versions may contain breaking changes.
 - Accuracy benchmark: pinned dbt (jaffle_shop), Python import and SQL lineage
   corpora with hand-written expected results, scored by `scripts/benchmark.py`
   and checked in CI.
+- JavaScript and TypeScript structure (`.js .mjs .cjs .jsx .ts .mts .cts .tsx`):
+  functions, arrow functions and class methods with line spans; ESM, type-only,
+  `require()` and `import()` dependencies resolved for relative specifiers.
+  Syntax errors are reported as diagnostics and make coverage partial.
+
+### Changed
+
+- Dead-code candidates for JavaScript/TypeScript modules use resolved imports.
 
 ## [0.3.0] - 2026-10-12
 

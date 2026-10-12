@@ -8,7 +8,7 @@ from pathlib import Path, PureWindowsPath
 
 from pathspec import GitIgnoreSpec
 
-SOURCE_EXTENSIONS = {".py", ".sql", ".yml", ".yaml", ".js", ".ts"}
+SOURCE_EXTENSIONS = {".py", ".sql", ".yml", ".yaml", ".js", ".mjs", ".cjs", ".jsx", ".ts", ".mts", ".cts", ".tsx"}
 SKIP_DIRS = {".git", ".venv", "venv", "node_modules", "__pycache__", ".cartography",
              ".pytest_cache", ".ruff_cache", ".mypy_cache", ".tox", "build", "dist",
              ".agents", ".codex", ".aws"}

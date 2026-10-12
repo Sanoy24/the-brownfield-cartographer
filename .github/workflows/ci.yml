@@ -29,7 +29,7 @@ jobs:
       - run: uv sync --frozen
       - run: uv run --no-sync pytest -q
       - run: uv run --no-sync ruff check src tests scripts
-      - run: uv run --no-sync mypy -p brownfield_cartographer.scanner -p brownfield_cartographer.persistence -p brownfield_cartographer.query_api --follow-imports=skip
+      - run: uv run --no-sync mypy -p brownfield_cartographer.scanner -p brownfield_cartographer.persistence -p brownfield_cartographer.query_api -p brownfield_cartographer.analyzers.javascript_analyzer --follow-imports=skip
       - run: uv run --no-sync cartographer --help
       - run: uv build
       - if: matrix.python != '3.12'
