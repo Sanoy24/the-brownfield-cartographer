@@ -9,7 +9,11 @@ import json
 from pathlib import PurePosixPath, PureWindowsPath
 from typing import Any
 
-from brownfield_cartographer.models.schemas import DatasetNode, TransformationNode, TransformationType
+from brownfield_cartographer.models.schemas import (
+    DatasetNode,
+    TransformationNode,
+    TransformationType,
+)
 
 SCHEMA_URL = "https://schemas.getdbt.com/dbt/manifest/v12.json"
 MAX_RESOURCES = 10_000

@@ -18,7 +18,6 @@ from brownfield_cartographer.models.schemas import (
     TransformationType,
 )
 
-
 # ---------------------------------------------------------------------------
 # Fixtures: Build a realistic dbt-style lineage graph
 # ---------------------------------------------------------------------------

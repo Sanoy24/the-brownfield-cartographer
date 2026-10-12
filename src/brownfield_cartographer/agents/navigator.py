@@ -15,10 +15,8 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 from collections import deque
-from pathlib import Path
-from typing import Annotated, Any
+from typing import Any
 
 from rich.console import Console
 from rich.markdown import Markdown

@@ -8,16 +8,21 @@ consumed by the query interface and artifact generators.
 
 from __future__ import annotations
 
-import json
 import hashlib
+import json
 import logging
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import networkx as nx
 from networkx.readwrite import json_graph
 
-from brownfield_cartographer.models.schemas import DatasetNode, FunctionNode, ModuleNode, TransformationNode
+from brownfield_cartographer.models.schemas import (
+    DatasetNode,
+    FunctionNode,
+    ModuleNode,
+    TransformationNode,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -260,7 +265,7 @@ class KnowledgeGraph:
         return self.graph.subgraph(lineage_nodes).copy()
 
     def compute_pagerank(
-        self, subgraph: Optional[nx.DiGraph] = None
+        self, subgraph: nx.DiGraph | None = None
     ) -> dict[str, float]:
         """Compute PageRank scores to identify architectural hubs."""
         g = subgraph if subgraph is not None else self.graph
@@ -275,7 +280,7 @@ class KnowledgeGraph:
             return nx.degree_centrality(g)
 
     def find_circular_dependencies(
-        self, subgraph: Optional[nx.DiGraph] = None
+        self, subgraph: nx.DiGraph | None = None
     ) -> list[list[str]]:
         """Detect strongly connected components (circular dependencies)."""
         g = subgraph if subgraph is not None else self.graph
@@ -392,7 +397,7 @@ class KnowledgeGraph:
         )
 
     @classmethod
-    def from_artifacts(cls, cartography_dir: Path) -> "KnowledgeGraph":
+    def from_artifacts(cls, cartography_dir: Path) -> KnowledgeGraph:
         """
         Reconstruct a KnowledgeGraph from serialized .cartography/ artifacts.
 

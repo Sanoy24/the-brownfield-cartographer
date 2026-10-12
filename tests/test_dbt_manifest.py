@@ -4,10 +4,13 @@ from pathlib import Path
 
 import pytest
 
-from brownfield_cartographer.analyzers.dbt_manifest import SCHEMA_URL, parse_dbt_manifest
+from brownfield_cartographer.analyzers.dbt_manifest import (
+    SCHEMA_URL,
+    parse_dbt_manifest,
+)
 from brownfield_cartographer.graph.knowledge_graph import KnowledgeGraph
-from brownfield_cartographer.query_api import QueryEngine
 from brownfield_cartographer.orchestrator import Orchestrator
+from brownfield_cartographer.query_api import QueryEngine
 from brownfield_cartographer.scanner import ScanSettings, scan_repository
 
 
@@ -99,6 +102,7 @@ def manifest_repo(tmp_path, manifest):
 
 def test_cli_manifest_overrides_ignore_and_preserves_source_context(manifest_repo):
     from typer.testing import CliRunner
+
     from brownfield_cartographer.cli import app
     result = CliRunner().invoke(app, ["analyze", str(manifest_repo), "--dbt-manifest", "target/manifest.json", "--json"])
     assert result.exit_code == 0, result.output
@@ -156,6 +160,7 @@ def test_bad_artifact_never_advances_checkpoint(manifest_repo, failure):
 @pytest.mark.parametrize("path", ["../manifest.json", "/manifest.json", "C:/manifest.json", ".aws/manifest.json"])
 def test_cli_rejects_external_or_protected_artifacts(manifest_repo, path):
     from typer.testing import CliRunner
+
     from brownfield_cartographer.cli import app
     result = CliRunner().invoke(app, ["analyze", str(manifest_repo), "--dbt-manifest", path, "--json"])
     assert result.exit_code == 1

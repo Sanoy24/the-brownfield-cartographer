@@ -8,7 +8,7 @@ from brownfield_cartographer.query_api import QueryEngine
 def test_same_named_repositories_keep_independent_indexes(tmp_path):
     output = tmp_path / "results"
     repos = [tmp_path / owner / "repo" for owner in ("first", "second")]
-    for repo, symbol in zip(repos, ("alpha", "beta")):
+    for repo, symbol in zip(repos, ("alpha", "beta"), strict=True):
         repo.mkdir(parents=True)
         (repo / "source.py").write_text(f"def {symbol}():\n    pass\n")
 
@@ -22,7 +22,7 @@ def test_same_named_repositories_keep_independent_indexes(tmp_path):
     assert first_index != second_index
     assert (first_index / "index.json").read_bytes() == original
     assert (first_index / "state.json").read_bytes() == checkpoint
-    for repo, index, symbol in zip(repos, (first_index, second_index), ("alpha", "beta")):
+    for repo, index, symbol in zip(repos, (first_index, second_index), ("alpha", "beta"), strict=True):
         assert QueryEngine.open(repo, index).find_symbol(symbol)["data"]["total"] == 1
         cached = Orchestrator().run(str(repo), output_dir=output)
         assert cached["status"] == "no_changes"

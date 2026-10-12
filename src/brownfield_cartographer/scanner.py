@@ -1,9 +1,9 @@
 """Bounded local file inventory shared by all analysis stages."""
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 import hashlib
 import os
+from dataclasses import dataclass, field
 from pathlib import Path, PureWindowsPath
 
 from pathspec import GitIgnoreSpec

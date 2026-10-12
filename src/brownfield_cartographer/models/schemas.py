@@ -9,10 +9,8 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import Enum
-from typing import Optional
 
 from pydantic import BaseModel, Field
-
 
 # ---------------------------------------------------------------------------
 # Enumerations
@@ -60,11 +58,11 @@ class ModuleNode(BaseModel):
 
     path: str = Field(description="Relative path from repo root")
     language: Language = Field(default=Language.UNKNOWN)
-    purpose_statement: Optional[str] = Field(
+    purpose_statement: str | None = Field(
         default=None,
         description="LLM-generated summary of what this module does (not how)",
     )
-    domain_cluster: Optional[str] = Field(
+    domain_cluster: str | None = Field(
         default=None,
         description="Inferred business domain (e.g. ingestion, transformation)",
     )
@@ -80,7 +78,7 @@ class ModuleNode(BaseModel):
         default=False,
         description="True if exported symbols are never imported elsewhere",
     )
-    last_modified: Optional[datetime] = Field(default=None)
+    last_modified: datetime | None = Field(default=None)
 
     # Structural data extracted by the Surveyor
     imports: list[str] = Field(
@@ -113,15 +111,15 @@ class DatasetNode(BaseModel):
 
     name: str = Field(description="Qualified name (e.g. schema.table or file path)")
     storage_type: StorageType = Field(default=StorageType.TABLE)
-    schema_snapshot: Optional[dict] = Field(
+    schema_snapshot: dict | None = Field(
         default=None,
         description="Column-level schema if available",
     )
-    freshness_sla: Optional[str] = Field(default=None)
-    owner: Optional[str] = Field(default=None)
+    freshness_sla: str | None = Field(default=None)
+    owner: str | None = Field(default=None)
     is_source_of_truth: bool = Field(default=False)
-    dbt_unique_id: Optional[str] = Field(default=None)
-    relation_name: Optional[str] = Field(default=None)
+    dbt_unique_id: str | None = Field(default=None)
+    relation_name: str | None = Field(default=None)
 
 
 class FunctionNode(BaseModel):
@@ -136,7 +134,7 @@ class FunctionNode(BaseModel):
     )
     parent_module: str = Field(description="Relative path of the containing module")
     signature: str = Field(default="", description="Function signature as source text")
-    purpose_statement: Optional[str] = Field(default=None)
+    purpose_statement: str | None = Field(default=None)
     call_count_within_repo: int = Field(
         default=0,
         description="How many other functions in the repo call this one",
@@ -167,11 +165,11 @@ class TransformationNode(BaseModel):
         default=(0, 0),
         description="(start_line, end_line) in the source file",
     )
-    sql_query_if_applicable: Optional[str] = Field(default=None)
-    analysis_method: Optional[str] = Field(default=None)
-    confidence: Optional[str] = Field(default=None)
-    artifact_file: Optional[str] = Field(default=None)
-    resource_id: Optional[str] = Field(default=None)
+    sql_query_if_applicable: str | None = Field(default=None)
+    analysis_method: str | None = Field(default=None)
+    confidence: str | None = Field(default=None)
+    artifact_file: str | None = Field(default=None)
+    resource_id: str | None = Field(default=None)
 
 
 # ---------------------------------------------------------------------------

@@ -95,14 +95,14 @@ class LLMConfig:
         return self.fast_model or self.strong_model
 
     @classmethod
-    def from_env(cls) -> "LLMConfig":
+    def from_env(cls) -> LLMConfig:
         """Resolve the best available LLM provider from environment."""
         # Legacy override: sets both tiers to the same model
         legacy_override = os.getenv("LLM_MODEL", "")
         fast_override = os.getenv("LLM_MODEL_FAST", "") or legacy_override
         strong_override = os.getenv("LLM_MODEL_STRONG", "") or legacy_override
 
-        def _resolve(provider: str, api_key: str = "", base_url: str = "") -> "LLMConfig":
+        def _resolve(provider: str, api_key: str = "", base_url: str = "") -> LLMConfig:
             default_fast, default_strong = _PROVIDER_MODEL_TIERS.get(
                 provider, ("llama3", "llama3")
             )
@@ -494,7 +494,7 @@ def cluster_into_domains(
                 member_vectors.toarray() - center.reshape(1, -1), axis=1
             )
             sorted_by_dist = sorted(
-                zip(member_paths, distances.tolist()), key=lambda x: x[1]
+                zip(member_paths, distances.tolist(), strict=True), key=lambda x: x[1]
             )
             # Top 3 exemplars (closest to centroid)
             exemplars[label] = [p for p, _ in sorted_by_dist[:3]]

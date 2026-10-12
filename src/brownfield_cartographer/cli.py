@@ -8,10 +8,10 @@ Provides the `cartographer` commands:
 
 from __future__ import annotations
 
-import logging
 import json
-from contextlib import redirect_stdout
+import logging
 import sys
+from contextlib import redirect_stdout
 from pathlib import Path
 
 import typer
@@ -109,7 +109,7 @@ def analyze(
             typer.echo(json.dumps({"status": "failed", "error": str(exc)}))
         else:
             console.print(f"[bold red]Error:[/bold red] {exc}")
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from None
     finally:
         if orchestrator is not None:
             orchestrator.cleanup()
@@ -150,7 +150,7 @@ def query(
 
     base_path = Path(path).resolve()
     cartography_dir = base_path / ".cartography"
-    
+
     if not cartography_dir.exists():
         # Maybe the path provided IS the artifact directory?
         if (base_path / "module_graph.json").exists():
@@ -164,7 +164,7 @@ def query(
 
     # Multi-repo support: check for subdirectories (repo folders)
     repos = [d for d in cartography_dir.iterdir() if d.is_dir() and (d / "module_graph.json").exists()]
-    
+
     target_dir = cartography_dir
     if repos:
         if len(repos) == 1:
@@ -174,7 +174,7 @@ def query(
             console.print("\n[bold]Select a repository to query:[/bold]")
             for i, repo_dir in enumerate(repos, 1):
                 console.print(f"  {i}. [cyan]{repo_dir.name}[/cyan]")
-            
+
             choice = Prompt.ask(
                 "\nEnter number",
                 choices=[str(i) for i in range(1, len(repos) + 1)],
@@ -191,13 +191,13 @@ def query(
                 console.print("Warning: this index has incomplete coverage; inspect analysis_summary.json.", markup=False)
         except (OSError, ValueError):
             console.print("Warning: run diagnostics could not be read.", markup=False)
-    
+
     try:
         kg = KnowledgeGraph.from_artifacts(target_dir)
     except Exception as exc:
         console.print(f"[bold red]Failed to load graph:[/bold red] {exc}")
-        raise typer.Exit(code=1)
-        
+        raise typer.Exit(code=1) from None
+
     summary = kg.summary()
     if summary['total_nodes'] == 0:
         console.print(

@@ -1,15 +1,23 @@
 """Source-level regressions for the local, deterministic foundation."""
-from pathlib import Path
 import json
+from pathlib import Path
 
 import pytest
 
 from brownfield_cartographer.agents.hydrologist import Hydrologist
-from brownfield_cartographer.agents.navigator import tool_blast_radius, tool_trace_lineage
+from brownfield_cartographer.agents.navigator import (
+    tool_blast_radius,
+    tool_trace_lineage,
+)
 from brownfield_cartographer.agents.surveyor import Surveyor
 from brownfield_cartographer.analyzers.sql_lineage import analyze_sql_file
 from brownfield_cartographer.graph.knowledge_graph import KnowledgeGraph
-from brownfield_cartographer.models.schemas import DatasetNode, FunctionNode, ModuleNode, TransformationNode
+from brownfield_cartographer.models.schemas import (
+    DatasetNode,
+    FunctionNode,
+    ModuleNode,
+    TransformationNode,
+)
 
 
 def test_reverse_import_impact_excludes_start_in_cycle():
@@ -117,7 +125,7 @@ def test_dbt_incremental_preserves_refs_and_removes_deleted_assets(tmp_path):
 
 
 def test_scanner_ignores_binary_secrets_and_limits(tmp_path):
-    from brownfield_cartographer.scanner import scan_repository, ScanSettings
+    from brownfield_cartographer.scanner import ScanSettings, scan_repository
     (tmp_path / ".gitignore").write_text("ignored/\n")
     (tmp_path / ".cartographerignore").write_text("private.py\n")
     (tmp_path / "ignored").mkdir()
@@ -149,7 +157,7 @@ def test_scanner_symlink_outside_scope(tmp_path):
 
 
 def test_nested_ignore_negation_and_file_limit(tmp_path):
-    from brownfield_cartographer.scanner import scan_repository, ScanSettings
+    from brownfield_cartographer.scanner import ScanSettings, scan_repository
     (tmp_path / ".gitignore").write_text("*.py\n!keep.py\n")
     nested = tmp_path / "pkg"
     nested.mkdir()
@@ -234,6 +242,7 @@ def test_artifact_failure_preserves_checkpoint(tmp_path, monkeypatch):
 
 def test_no_network_for_local_analysis_and_queries(tmp_path, monkeypatch):
     import socket
+
     from brownfield_cartographer.orchestrator import Orchestrator
     def disallow(*args, **kwargs):
         pytest.fail("Local analysis attempted network access")
@@ -248,6 +257,7 @@ def test_no_network_for_local_analysis_and_queries(tmp_path, monkeypatch):
 
 def test_partial_cli_has_nonzero_exit(tmp_path):
     from typer.testing import CliRunner
+
     from brownfield_cartographer.cli import app
     (tmp_path / "broken.py").write_text("def broken(\n")
     result = CliRunner().invoke(app, ["analyze", str(tmp_path)])
@@ -255,8 +265,8 @@ def test_partial_cli_has_nonzero_exit(tmp_path):
 
 
 def test_pipeline_offline_changes_and_failed_checkpoint(tmp_path, monkeypatch):
-    from brownfield_cartographer.orchestrator import Orchestrator
     import brownfield_cartographer.agents.semanticist as semanticist
+    from brownfield_cartographer.orchestrator import Orchestrator
     monkeypatch.setenv("OPENAI_API_KEY", "must-not-be-used")
     monkeypatch.setattr(semanticist, "_create_chat_model", lambda *a, **k: pytest.fail("Model initialized"))
     repo = tmp_path / "repo"
