@@ -13,5 +13,7 @@ updates:
     commit-message:
       prefix: chore
     groups:
+      # Major versions arrive as individual pull requests.
       python-dependencies:
         patterns: ["*"]
+        update-types: [minor, patch]
