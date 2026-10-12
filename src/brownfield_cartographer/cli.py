@@ -15,7 +15,6 @@ import sys
 from pathlib import Path
 
 import typer
-from dotenv import load_dotenv
 from rich.console import Console
 from rich.logging import RichHandler
 from rich.prompt import Prompt
@@ -24,9 +23,6 @@ from rich.table import Table
 from brownfield_cartographer.orchestrator import Orchestrator
 from brownfield_cartographer.query_api import QueryEngine
 from brownfield_cartographer.scanner import ScanSettings
-
-# Load environment variables from .env file
-load_dotenv()
 
 console = Console()
 

@@ -14,7 +14,6 @@ dependencies = [
     "networkx>=3.3",
     "rich>=13.0",
     "PyYAML>=6.0",
-    "gitpython>=3.1",
     "pathspec>=0.12,<1",
     # Static analysis
     "tree-sitter>=0.23",
@@ -23,8 +22,6 @@ dependencies = [
     # Graph analysis
     "numpy>=1.26",
     "scipy>=1.14",
-    # Environment
-    "python-dotenv>=1.0",
 ]
 
 [project.optional-dependencies]
