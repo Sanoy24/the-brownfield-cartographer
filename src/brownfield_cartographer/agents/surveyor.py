@@ -17,6 +17,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+from brownfield_cartographer.analyzers import javascript_analyzer
 from brownfield_cartographer.analyzers.tree_sitter_analyzer import (
     analyze_module,
     extract_functions_from_file,
@@ -28,7 +29,7 @@ from brownfield_cartographer.scanner import ScanResult, scan_repository
 logger = logging.getLogger(__name__)
 
 # File extensions the Surveyor scans
-SCANNABLE_EXTENSIONS = {".py", ".sql", ".yml", ".yaml", ".js", ".ts"}
+SCANNABLE_EXTENSIONS = {".py", ".sql", ".yml", ".yaml", *javascript_analyzer.EXTENSIONS}
 
 # Directories to always skip
 SKIP_DIRS = {
@@ -123,7 +124,12 @@ def _detect_dead_code(
     """
     # Collect all imported module names across the codebase
     all_imported: set[str] = set()
+    js_imported: set[str] = set()
     for module in modules.values():
+        if module.language in {Language.JAVASCRIPT, Language.TYPESCRIPT}:
+            js_imported.update(javascript_analyzer.resolve(imp, module.path, set(modules)) or ""
+                               for imp in module.imports)
+            continue
         for imp in module.imports:
             all_imported.add(imp)
             # Also add partial matches for package imports
@@ -135,6 +141,10 @@ def _detect_dead_code(
     for path, module in modules.items():
         if not module.public_functions and not module.classes:
             continue  # Nothing to import from here
+        if module.language in {Language.JAVASCRIPT, Language.TYPESCRIPT}:
+            if path not in js_imported:
+                dead_candidates.add(path)
+            continue
 
         # Convert file path to module-style dotted name
         module_name = path.replace("/", ".").replace("\\", ".")
@@ -261,8 +271,7 @@ class Surveyor:
             knowledge_graph, source_files, modules, dead_code, velocity
         )
         summary["diagnostics"] = diagnostics
-        summary["unsupported_structure"] = sorted(
-            p for p, module in modules.items() if module.language in {Language.JAVASCRIPT, Language.TYPESCRIPT})
+        summary["unsupported_structure"] = []
         return summary
 
     def _run_incremental(
@@ -384,8 +393,11 @@ def _resolve_import(import_name: str, known_paths: set[str], importer: str = "")
     """
     Attempt to resolve a Python import name to a known module file path.
 
-    Handles dotted imports by converting them to path separators.
+    Handles dotted imports by converting them to path separators. JavaScript
+    and TypeScript importers use relative-specifier resolution instead.
     """
+    if importer.endswith(javascript_analyzer.EXTENSIONS):
+        return javascript_analyzer.resolve(import_name, importer, known_paths)
     if import_name.startswith("."):
         level = len(import_name) - len(import_name.lstrip("."))
         parts = importer.replace("\\", "/").split("/")[:-1]
