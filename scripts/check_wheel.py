@@ -30,7 +30,7 @@ from brownfield_cartographer.query_api import QueryEngine
 package = Path(brownfield_cartographer.__file__).resolve().parent
 assert package.is_relative_to(Path(sys.prefix).resolve()), package
 assert (package / "py.typed").is_file()
-assert importlib.metadata.version("the-brownfield-cartographer") == sys.argv[1]
+assert importlib.metadata.version("brownfield-cartographer") == sys.argv[1]
 for optional in ("langchain_core", "langgraph", "sklearn", "mcp"):
     assert importlib.util.find_spec(optional) is None, optional
 

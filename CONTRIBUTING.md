@@ -40,10 +40,30 @@ the merged feature branch. Use commit/PR titles such as `feat: ...`, `fix: ...`,
 reviewed `main` commits using version tags such as `v0.3.0`; prereleases may use
 `v0.3.0rc1`. Creating a branch does not authorize an automatic commit or push.
 
-Repository administrators should configure a GitHub ruleset for `main` to
-require pull requests, passing CI, resolved review conversations, and to block
-force pushes and deletion. This document defines the convention; it does not
-configure remote protection or guarantee enforcement.
+A GitHub ruleset on `main` requires pull requests, passing CI jobs, resolved
+review conversations, and squash merges, and blocks force pushes and deletion.
+
+### Publishing a release
+
+1. In a pull request, set `version` in `pyproject.toml`, run `uv lock`, and move
+   the `Unreleased` changelog entries under a new `## [X.Y.Z] - YYYY-MM-DD`
+   heading.
+2. After it merges, tag the merge commit and push the tag:
+
+   ```sh
+   git switch main && git pull --ff-only origin main
+   git tag -a vX.Y.Z -m "vX.Y.Z"
+   git push origin vX.Y.Z
+   ```
+
+The `Release` workflow checks that the tag matches the project version and that
+the changelog has a matching section, runs the tests and installed-wheel checks,
+publishes to PyPI, and creates a GitHub release with the changelog notes.
+
+Publishing uses PyPI trusted publishing, so the repository holds no PyPI token.
+A maintainer configures it once on PyPI with owner `Sanoy24`, repository
+`the-brownfield-cartographer`, workflow `release.yml`, and environment `pypi`.
+PyPI versions cannot be reused; fix a bad release with a new patch version.
 
 ## Development
 
