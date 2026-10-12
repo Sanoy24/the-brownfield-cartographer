@@ -50,6 +50,74 @@ wheels = [
 ]
 
 [[package]]
+name = "brownfield-cartographer"
+version = "0.3.0"
+source = { editable = "." }
+dependencies = [
+    { name = "networkx" },
+    { name = "numpy" },
+    { name = "pathspec" },
+    { name = "pydantic" },
+    { name = "pyyaml" },
+    { name = "rich" },
+    { name = "scipy" },
+    { name = "sqlglot" },
+    { name = "tree-sitter" },
+    { name = "tree-sitter-python" },
+    { name = "typer" },
+]
+
+[package.optional-dependencies]
+llm = [
+    { name = "langchain-core" },
+    { name = "langchain-google-genai" },
+    { name = "langchain-ollama" },
+    { name = "langchain-openai" },
+    { name = "langgraph" },
+    { name = "scikit-learn" },
+]
+mcp = [
+    { name = "mcp" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "mypy" },
+    { name = "pytest" },
+    { name = "ruff" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "langchain-core", marker = "extra == 'llm'", specifier = ">=0.3" },
+    { name = "langchain-google-genai", marker = "extra == 'llm'", specifier = ">=2.0" },
+    { name = "langchain-ollama", marker = "extra == 'llm'", specifier = ">=0.3" },
+    { name = "langchain-openai", marker = "extra == 'llm'", specifier = ">=0.3" },
+    { name = "langgraph", marker = "extra == 'llm'", specifier = ">=0.2" },
+    { name = "mcp", marker = "extra == 'mcp'", specifier = ">=1.26,<2" },
+    { name = "networkx", specifier = ">=3.3" },
+    { name = "numpy", specifier = ">=1.26" },
+    { name = "pathspec", specifier = ">=0.12,<1" },
+    { name = "pydantic", specifier = ">=2.0" },
+    { name = "pyyaml", specifier = ">=6.0" },
+    { name = "rich", specifier = ">=13.0" },
+    { name = "scikit-learn", marker = "extra == 'llm'", specifier = ">=1.5" },
+    { name = "scipy", specifier = ">=1.14" },
+    { name = "sqlglot", specifier = ">=25.0" },
+    { name = "tree-sitter", specifier = ">=0.23" },
+    { name = "tree-sitter-python", specifier = ">=0.23" },
+    { name = "typer", specifier = ">=0.12" },
+]
+provides-extras = ["mcp", "llm"]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "mypy", specifier = ">=1.15" },
+    { name = "pytest", specifier = ">=8,<10" },
+    { name = "ruff", specifier = ">=0.11" },
+]
+
+[[package]]
 name = "certifi"
 version = "2026.2.25"
 source = { registry = "https://pypi.org/simple" }
@@ -1744,74 +1812,6 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/47/c6/ee486fd809e357697ee8a44d3d69222b344920433d3b6666ccd9b374630c/tenacity-9.1.4.tar.gz", hash = "sha256:adb31d4c263f2bd041081ab33b498309a57c77f9acf2db65aadf0898179cf93a", size = 49413, upload-time = "2026-02-07T10:45:33.841Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/d7/c1/eb8f9debc45d3b7918a32ab756658a0904732f75e555402972246b0b8e71/tenacity-9.1.4-py3-none-any.whl", hash = "sha256:6095a360c919085f28c6527de529e76a06ad89b23659fa881ae0649b867a9d55", size = 28926, upload-time = "2026-02-07T10:45:32.24Z" },
-]
-
-[[package]]
-name = "the-brownfield-cartographer"
-version = "0.2.0"
-source = { editable = "." }
-dependencies = [
-    { name = "networkx" },
-    { name = "numpy" },
-    { name = "pathspec" },
-    { name = "pydantic" },
-    { name = "pyyaml" },
-    { name = "rich" },
-    { name = "scipy" },
-    { name = "sqlglot" },
-    { name = "tree-sitter" },
-    { name = "tree-sitter-python" },
-    { name = "typer" },
-]
-
-[package.optional-dependencies]
-llm = [
-    { name = "langchain-core" },
-    { name = "langchain-google-genai" },
-    { name = "langchain-ollama" },
-    { name = "langchain-openai" },
-    { name = "langgraph" },
-    { name = "scikit-learn" },
-]
-mcp = [
-    { name = "mcp" },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "mypy" },
-    { name = "pytest" },
-    { name = "ruff" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "langchain-core", marker = "extra == 'llm'", specifier = ">=0.3" },
-    { name = "langchain-google-genai", marker = "extra == 'llm'", specifier = ">=2.0" },
-    { name = "langchain-ollama", marker = "extra == 'llm'", specifier = ">=0.3" },
-    { name = "langchain-openai", marker = "extra == 'llm'", specifier = ">=0.3" },
-    { name = "langgraph", marker = "extra == 'llm'", specifier = ">=0.2" },
-    { name = "mcp", marker = "extra == 'mcp'", specifier = ">=1.26,<2" },
-    { name = "networkx", specifier = ">=3.3" },
-    { name = "numpy", specifier = ">=1.26" },
-    { name = "pathspec", specifier = ">=0.12,<1" },
-    { name = "pydantic", specifier = ">=2.0" },
-    { name = "pyyaml", specifier = ">=6.0" },
-    { name = "rich", specifier = ">=13.0" },
-    { name = "scikit-learn", marker = "extra == 'llm'", specifier = ">=1.5" },
-    { name = "scipy", specifier = ">=1.14" },
-    { name = "sqlglot", specifier = ">=25.0" },
-    { name = "tree-sitter", specifier = ">=0.23" },
-    { name = "tree-sitter-python", specifier = ">=0.23" },
-    { name = "typer", specifier = ">=0.12" },
-]
-provides-extras = ["mcp", "llm"]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "mypy", specifier = ">=1.15" },
-    { name = "pytest", specifier = ">=8,<10" },
-    { name = "ruff", specifier = ">=0.11" },
 ]
 
 [[package]]
