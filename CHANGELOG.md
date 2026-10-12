@@ -7,14 +7,22 @@ versions may contain breaking changes.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-12
+
+First release published to PyPI as `brownfield-cartographer`.
+
 ### Added
 
+- `cartographer --version`.
+- Tag-triggered release workflow publishing to PyPI through trusted publishing.
 - Apache-2.0 license, code of conduct, security policy, issue and pull request
   templates, and Dependabot configuration.
 - Package metadata: license, project URLs, keywords, and classifiers.
 
 ### Changed
 
+- The distribution is renamed from `the-brownfield-cartographer` to
+  `brownfield-cartographer`, matching the `brownfield_cartographer` import name.
 - The CLI no longer loads a `.env` file. Core analysis never reads API keys.
 - `.env.example` now documents only the optional legacy `llm` extra.
 - Ruff checks pyflakes, pycodestyle, import order, bugbear, and pyupgrade rules.
@@ -27,7 +35,7 @@ versions may contain breaking changes.
 - Committed `.cartography/` output samples, which contained machine-specific
   paths, the standalone `visualize.html` demo, and `RECONNAISSANCE.md`.
 
-## [0.2.0]
+## [0.2.0] - untagged
 
 ### Added
 
@@ -46,5 +54,6 @@ versions may contain breaking changes.
 - Distinct transformation IDs and statement-specific SQL sources and targets.
 - Failed or partial runs no longer advance the successful checkpoint.
 
-[Unreleased]: https://github.com/Sanoy24/the-brownfield-cartographer/compare/v0.2.0...HEAD
-[0.2.0]: https://github.com/Sanoy24/the-brownfield-cartographer/releases/tag/v0.2.0
+[Unreleased]: https://github.com/Sanoy24/the-brownfield-cartographer/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/Sanoy24/the-brownfield-cartographer/releases/tag/v0.3.0
+[0.2.0]: https://github.com/Sanoy24/the-brownfield-cartographer/tree/6079f70

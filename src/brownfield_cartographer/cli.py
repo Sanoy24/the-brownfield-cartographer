@@ -54,10 +54,20 @@ def _setup_logging(verbose: bool = False) -> None:
     )
 
 
+def _print_version(value: bool) -> None:
+    if value:
+        from importlib.metadata import version
+
+        typer.echo(f"cartographer {version('brownfield-cartographer')}")
+        raise typer.Exit()
+
+
 @app.callback()
-def callback() -> None:
+def callback(
+    _version: bool = typer.Option(False, "--version", callback=_print_version, is_eager=True,
+                                  help="Show the installed version and exit."),
+) -> None:
     """Brownfield Cartographer - local codebase intelligence."""
-    pass
 
 
 @app.command()

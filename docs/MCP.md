@@ -4,13 +4,23 @@ Brownfield Cartographer exposes six read-only local tools over MCP stdio. The
 server returns repository facts and source excerpts; your existing host model
 explains them. Cartographer needs no model credential or running model service.
 
-Install and index a local checkout first:
+Install the package with its MCP extra and index the target repository first:
 
 ```sh
-uv sync --frozen --extra mcp
-uv run cartographer analyze /absolute/path/to/target
+uv tool install "brownfield-cartographer[mcp]"
+cartographer analyze /absolute/path/to/target
 ```
 
+The installed `cartographer-mcp` command accepts the same `--repo` and
+`--index-dir` arguments as the module invocation below, and starts without
+downloading anything. `uv tool dir --bin` shows where it is installed, if your
+host needs an absolute command path. For example, with Claude Code:
+
+```sh
+claude mcp add --transport stdio --scope project brownfield -- cartographer-mcp --repo /absolute/path/to/target
+```
+
+The remaining examples use a source checkout (`uv sync --frozen --extra mcp`).
 For host configurations, use the absolute Python interpreter in Cartographer's
 virtual environment (`/absolute/path/to/cartographer/.venv/bin/python` on Unix,
 `C:/path/to/cartographer/.venv/Scripts/python.exe` on Windows). Launch arguments

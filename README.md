@@ -14,27 +14,32 @@ The support table below describes current capabilities and limitations.
 
 ## Install and analyze
 
-Requires Python 3.12+, Git, and [uv](https://docs.astral.sh/uv/).
+Requires Python 3.12+ and Git. Install the command-line tools from PyPI with
+[uv](https://docs.astral.sh/uv/) or [pipx](https://pipx.pypa.io/):
 
 ```sh
-git clone https://github.com/Sanoy24/the-brownfield-cartographer.git
-cd the-brownfield-cartographer
-uv sync --frozen
+uv tool install "brownfield-cartographer[mcp]"
+# or: pipx install "brownfield-cartographer[mcp]"
+cartographer --version
 
 # Local analysis needs no network, API key, or model service.
-uv run cartographer analyze /path/to/repository
+cartographer analyze /path/to/repository
 
 # Force a fresh rebuild or choose an output root.
-uv run cartographer analyze /path/to/repository --full -o ./results
+cartographer analyze /path/to/repository --full -o ./results
 
 # Optional: use a previously generated dbt v12 manifest.
-uv run cartographer analyze /path/to/dbt-project --dbt-manifest target/manifest.json
+cartographer analyze /path/to/dbt-project --dbt-manifest target/manifest.json
 ```
+
+Omit `[mcp]` if you only need the CLI. To run from a source checkout instead,
+clone the repository, run `uv sync --frozen`, and prefix commands with `uv run`,
+as in the examples below.
 
 An explicit GitHub URL input still downloads a checkout:
 
 ```sh
-uv run cartographer analyze https://github.com/owner/repository
+cartographer analyze https://github.com/owner/repository
 ```
 
 Local analysis never implicitly uploads source. Environment API keys do not
@@ -88,8 +93,8 @@ markers, and available source evidence. Ambiguous targets are rejected.
 ## Connect your AI assistant
 
 ```sh
-uv sync --frozen --extra mcp
-uv run --no-sync cartographer-mcp --repo /absolute/path/to/repository
+cartographer analyze /absolute/path/to/repository
+cartographer-mcp --repo /absolute/path/to/repository
 ```
 
 The stdio server exposes `get_architecture`, `find_symbol`, `trace_dependencies`,
