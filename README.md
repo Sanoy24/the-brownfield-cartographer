@@ -1,5 +1,9 @@
 # Brownfield Cartographer
 
+[![CI](https://github.com/Sanoy24/the-brownfield-cartographer/actions/workflows/ci.yml/badge.svg)](https://github.com/Sanoy24/the-brownfield-cartographer/actions/workflows/ci.yml)
+[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue.svg)
+
 A local-first repository analysis engine for evidence-backed code structure,
 dependency impact, and data lineage. The Python API, deterministic CLI, and
 read-only local MCP server share one query engine; reasoning belongs to the
@@ -137,4 +141,12 @@ uv run --no-sync python scripts/check_wheel.py
 
 Use short-lived `feat/`, `fix/`, `docs/`, and `chore/` branches and pull requests
 into stable `main`. Do not push feature work directly to `main`. See
-[CONTRIBUTING.md](CONTRIBUTING.md) for the workflow and release conventions.
+[CONTRIBUTING.md](CONTRIBUTING.md) for the workflow and release conventions,
+and [CHANGELOG.md](CHANGELOG.md) for release history.
+
+## Community and license
+
+Participation is governed by the [Code of Conduct](CODE_OF_CONDUCT.md). Report
+vulnerabilities privately as described in [SECURITY.md](SECURITY.md).
+
+Licensed under the [Apache License 2.0](LICENSE).

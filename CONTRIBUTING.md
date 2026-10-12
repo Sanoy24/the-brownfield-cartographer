@@ -4,6 +4,12 @@ Brownfield Cartographer provides local, deterministic repository analysis.
 Contributions should prioritize correctness, source evidence, safe scanning,
 and consistent behavior across the Python API, CLI, and MCP interfaces.
 
+By participating you agree to follow the [Code of Conduct](CODE_OF_CONDUCT.md).
+Report security issues privately as described in [SECURITY.md](SECURITY.md),
+not in public issues. Contributions are accepted under the project's
+[Apache-2.0 license](LICENSE). Add user-visible changes to the `Unreleased`
+section of [CHANGELOG.md](CHANGELOG.md).
+
 ## Branching and releases
 
 Use `main` as the stable integration branch. Work in short-lived branches based

@@ -1,0 +1,56 @@
+name: Bug report
+description: Incorrect analysis, a crash, or behavior that contradicts the docs
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Report security issues privately; see SECURITY.md.
+        Please do not paste proprietary source code. A minimal repository that reproduces the problem is ideal.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Include the exact command or MCP tool call and its output.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+      description: For analysis results, name the expected edge, dataset, or source location.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Minimal reproduction
+      description: Files (or a public repository and commit) plus commands that reproduce the problem.
+      render: text
+  - type: dropdown
+    id: interface
+    attributes:
+      label: Interface
+      options: [CLI, MCP server, Python API, Other]
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Cartographer version or commit
+      placeholder: 0.2.0 or a commit SHA
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: OS and Python version
+      placeholder: Ubuntu 24.04, Python 3.12.7
+    validations:
+      required: true
+  - type: textarea
+    id: summary
+    attributes:
+      label: analysis_summary.json (status and diagnostics)
+      description: The status, coverage, and diagnostics sections are usually enough.
+      render: json

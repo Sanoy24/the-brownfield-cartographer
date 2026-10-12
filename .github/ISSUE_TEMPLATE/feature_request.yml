@@ -1,0 +1,32 @@
+name: Feature request
+description: Propose a capability, analyzer, or query
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Cartographer is local-first and deterministic: core features must work offline, without API keys or model calls.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What are you trying to learn about a repository, and what do you do today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: Example command, MCP tool, or output. For new analyzers, include a small sample input and the expected relationships.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: checkboxes
+    id: contribute
+    attributes:
+      label: Contribution
+      options:
+        - label: I would be willing to open a pull request for this.
