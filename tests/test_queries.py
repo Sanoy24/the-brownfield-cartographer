@@ -46,6 +46,14 @@ def test_cli_json_matches_python(indexed_repo, command, args, method, kwargs):
     assert json.loads(result.stdout) == getattr(QueryEngine.open(indexed_repo), method)(**kwargs)
 
 
+def test_version_reports_installed_distribution():
+    from importlib.metadata import version
+
+    result = CliRunner().invoke(app, ["--version"])
+    assert result.exit_code == 0, result.output
+    assert result.stdout.strip() == f"cartographer {version('brownfield-cartographer')}"
+
+
 def test_analyze_json_stdout_is_clean(indexed_repo):
     result = CliRunner().invoke(app, ["analyze", str(indexed_repo), "--json"])
     assert result.exit_code == 0, result.output
