@@ -1,0 +1,20 @@
+{
+  "description": "Table-level SQL lineage: CTAS, INSERT ... SELECT with joins, CTEs, UNION ALL, a view over a subquery, and UPDATE ... FROM. CTE and alias names are not datasets.",
+  "status": "partial",
+  "lineage": [
+    ["raw.orders", "staging.orders"],
+    ["raw.customers", "staging.customers"],
+    ["staging.customers", "marts.customer_orders"],
+    ["staging.orders", "marts.customer_orders"],
+    ["staging.orders", "marts.order_summary"],
+    ["raw.web_events", "marts.all_events"],
+    ["raw.app_events", "marts.all_events"],
+    ["marts.customer_orders", "marts.top_customers"],
+    ["raw.refunds", "marts.order_summary"]
+  ],
+  "known_gaps": {
+    "lineage": [
+      {"edge": ["raw.refunds", "marts.order_summary"], "reason": "UPDATE ... FROM is not extracted; the statement is reported and coverage is partial."}
+    ]
+  }
+}

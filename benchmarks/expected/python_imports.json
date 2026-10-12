@@ -1,0 +1,27 @@
+{
+  "description": "Static Python imports: relative, aliased, package-qualified, try/except and TYPE_CHECKING imports. traps.py has dynamic, commented and string-literal imports that are not static dependencies.",
+  "status": "complete",
+  "imports": [
+    ["pkg/util.py", "pkg/core.py"],
+    ["pkg/aliased.py", "pkg/core.py"],
+    ["pkg/sub/deep.py", "pkg/core.py"],
+    ["pkg/sub/deep.py", "pkg/util.py"],
+    ["app.py", "pkg/util.py"],
+    ["conditional.py", "pkg/aliased.py"],
+    ["conditional.py", "pkg/core.py"]
+  ],
+  "ignore_import_targets": ["pkg/__init__.py", "pkg/sub/__init__.py"],
+  "functions": [
+    "app.py::main",
+    "conditional.py::make",
+    "pkg/aliased.py::build",
+    "pkg/core.py::Engine.run",
+    "pkg/core.py::decorated",
+    "pkg/core.py::helper",
+    "pkg/core.py::traced",
+    "pkg/sub/deep.py::combined",
+    "pkg/util.py::double",
+    "traps.py::load"
+  ],
+  "ignore_functions": ["pkg/core.py::traced.wrapper", "pkg/core.py::wrapper"]
+}
