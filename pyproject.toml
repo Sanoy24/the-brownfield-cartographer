@@ -58,7 +58,7 @@ Issues = "https://github.com/Sanoy24/the-brownfield-cartographer/issues"
 Changelog = "https://github.com/Sanoy24/the-brownfield-cartographer/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
-mcp = ["mcp>=1.26,<2"]
+mcp = ["mcp>=2.3,<3"]
 llm = [
     # Legacy, explicitly enabled enrichment; the core never calls a model.
     "langchain-core>=0.3",

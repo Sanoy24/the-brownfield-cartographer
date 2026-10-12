@@ -133,25 +133,25 @@ async def check():
             listing = await session.list_tools()
             assert {tool.name for tool in listing.tools} == set(requests)
             for tool in listing.tools:
-                assert tool.annotations.readOnlyHint
-                assert not tool.annotations.destructiveHint
-                assert not tool.annotations.openWorldHint
-                assert tool.outputSchema is not None
+                assert tool.annotations.read_only_hint
+                assert not tool.annotations.destructive_hint
+                assert not tool.annotations.open_world_hint
+                assert tool.output_schema is not None
             for name, (arguments, expected) in requests.items():
                 print(f"Checking installed MCP tool: {name}", flush=True)
                 result = await session.call_tool(name, arguments)
-                if result.isError or result.structuredContent != expected:
-                    print(json.dumps({"tool": name, "actual": result.structuredContent,
+                if result.is_error or result.structured_content != expected:
+                    print(json.dumps({"tool": name, "actual": result.structured_content,
                                       "expected": expected, "errors": [item.model_dump() for item in result.content]},
                                      default=str), file=sys.stderr, flush=True)
-                assert not result.isError, (name, result)
-                assert result.structuredContent == expected, name
+                assert not result.is_error, (name, result)
+                assert result.structured_content == expected, name
             for name, arguments in (
                 ("get_code_context", {"path": "../private.py"}),
                 ("get_architecture", {"limit": 0}),
                 ("trace_data_lineage", {"dataset": "analytics.orders", "direction": "sideways"}),
             ):
-                assert (await session.call_tool(name, arguments)).isError, name
+                assert (await session.call_tool(name, arguments)).is_error, name
             assert files() == before, "Read-only MCP tools modified repository/index files"
 
             # Simulate an external failed run without replacing the graph.
@@ -161,13 +161,13 @@ async def check():
                 summary.write_text(json.dumps({"status": "failed"}), encoding="utf-8")
                 changed = files()
                 response = await session.call_tool("get_architecture", {})
-                assert not response.isError
-                assert response.structuredContent["status"] == "failed"
+                assert not response.is_error
+                assert response.structured_content["status"] == "failed"
                 assert files() == changed, "Status refresh modified artifacts"
             finally:
                 summary.write_bytes(original)
             response = await session.call_tool("get_architecture", {})
-            assert response.structuredContent["status"] == "complete"
+            assert response.structured_content["status"] == "complete"
     assert files() == before
 
 asyncio.run(asyncio.wait_for(check(), timeout=60))

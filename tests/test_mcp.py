@@ -27,17 +27,23 @@ def test_read_only_stdio_tools(tmp_path):
                 assert {t.name for t in listing.tools} == {
                     "get_architecture", "find_symbol", "trace_dependencies", "analyze_impact",
                     "trace_data_lineage", "get_code_context"}
-                assert all(t.annotations.readOnlyHint and not t.annotations.openWorldHint for t in listing.tools)
+                assert all(t.annotations.read_only_hint and not t.annotations.open_world_hint for t in listing.tools)
                 architecture = await session.call_tool("get_architecture", {})
-                assert not architecture.isError
-                assert architecture.structuredContent["data"]["counts"]["modules"] == 1
+                assert not architecture.is_error
+                assert architecture.structured_content["data"]["counts"]["modules"] == 1
                 response = await session.call_tool("find_symbol", {"pattern": "run"})
-                assert not response.isError
-                assert response.structuredContent["data"]["matches"][0]["id"] == "source.py::run"
+                assert not response.is_error
+                assert response.structured_content["data"]["matches"][0]["id"] == "source.py::run"
                 context = await session.call_tool("get_code_context", {"path": "source.py", "start_line": 1, "end_line": 2})
-                assert context.structuredContent["data"]["content"] == "def run():\n    return 1"
+                assert context.structured_content["data"]["content"] == "def run():\n    return 1"
                 refused = await session.call_tool("get_code_context", {"path": "../secret.py"})
-                assert refused.isError
+                assert refused.is_error
+                # SDK v2 runs sync handlers on worker threads; concurrent calls must stay consistent.
+                calls = [("find_symbol", {"pattern": "run"}), ("get_architecture", {}),
+                         ("analyze_impact", {"target": "source.py"})] * 4
+                results = await asyncio.gather(*(session.call_tool(name, args) for name, args in calls))
+                assert not any(result.is_error for result in results)
+                assert {r.structured_content["snapshot_id"] for r in results} == {response.structured_content["snapshot_id"]}
     asyncio.run(asyncio.wait_for(check(), timeout=30))
     after = {p.relative_to(tmp_path): p.read_bytes() for p in tmp_path.rglob("*") if p.is_file()}
     assert before == after
@@ -45,12 +51,12 @@ def test_read_only_stdio_tools(tmp_path):
 
 @pytest.mark.parametrize("installed,expected", [
     (None, "Install the mcp extra"),
-    ("2.3.0", "mcp 2.3.0 is installed, but Cartographer requires mcp>=1.26,<2"),
+    ("1.30.0", "mcp 1.30.0 is installed, but Cartographer requires mcp>=2.3,<3"),
 ])
 def test_unusable_mcp_sdk_is_reported(monkeypatch, tmp_path, installed, expected):
     from brownfield_cartographer import mcp_server
 
-    monkeypatch.setitem(sys.modules, "mcp.server.fastmcp", None)
+    monkeypatch.setitem(sys.modules, "mcp.server.mcpserver", None)
     monkeypatch.setattr(mcp_server, "_installed_mcp_version", lambda: installed)
     with pytest.raises(RuntimeError, match=expected):
         mcp_server.create_server(tmp_path)
