@@ -138,10 +138,14 @@ Maximum output is 64 KB; result counts are capped at 200 and traversal depth at
 20. Code excerpts contain at most 200 lines/32 KB. Ambiguous names and invalid
 arguments produce tool errors, rather than choosing an arbitrary match.
 
-The server uses the maintained v1 SDK line with an explicit upper bound; see
-the [official MCP SDK documentation](https://py.sdk.modelcontextprotocol.io/v1/).
+The server uses MCP Python SDK 2.x (`mcp>=2.3,<3`); see the
+[official MCP SDK documentation](https://py.sdk.modelcontextprotocol.io/v2/).
+The SDK runs tool handlers on worker threads, so Cartographer serializes
+queries against the shared index. If an incompatible SDK is installed, the
+server exits with the installed version and the supported range.
 The automated test launches a real stdio server, discovers tools, reads source,
-checks structured results, rejects an out-of-scope path, and verifies that the
+checks structured results, makes concurrent tool calls, rejects an out-of-scope
+path, and verifies that the
 repository/index files remain unchanged. This verifies protocol integration;
 an interactive session in Claude Code, Codex, or Cursor has not been exercised
 by that test. No host settings are installed automatically.
