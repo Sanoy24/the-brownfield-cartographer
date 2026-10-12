@@ -39,7 +39,7 @@ dependencies = [
     "networkx>=3.3",
     "rich>=13.0",
     "PyYAML>=6.0",
-    "pathspec>=0.12,<1",
+    "pathspec>=0.12,<2",
     # Static analysis
     "tree-sitter>=0.23",
     "tree-sitter-python>=0.23",
@@ -56,7 +56,7 @@ Issues = "https://github.com/Sanoy24/the-brownfield-cartographer/issues"
 Changelog = "https://github.com/Sanoy24/the-brownfield-cartographer/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
-mcp = ["mcp>=1.26,<2"]
+mcp = ["mcp>=1.26,<3"]
 llm = [
     # Legacy, explicitly enabled enrichment; the core never calls a model.
     "langchain-core>=0.3",
