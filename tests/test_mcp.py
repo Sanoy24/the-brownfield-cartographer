@@ -41,3 +41,16 @@ def test_read_only_stdio_tools(tmp_path):
     asyncio.run(asyncio.wait_for(check(), timeout=30))
     after = {p.relative_to(tmp_path): p.read_bytes() for p in tmp_path.rglob("*") if p.is_file()}
     assert before == after
+
+
+@pytest.mark.parametrize("installed,expected", [
+    (None, "Install the mcp extra"),
+    ("2.3.0", "mcp 2.3.0 is installed, but Cartographer requires mcp>=1.26,<2"),
+])
+def test_unusable_mcp_sdk_is_reported(monkeypatch, tmp_path, installed, expected):
+    from brownfield_cartographer import mcp_server
+
+    monkeypatch.setitem(sys.modules, "mcp.server.fastmcp", None)
+    monkeypatch.setattr(mcp_server, "_installed_mcp_version", lambda: installed)
+    with pytest.raises(RuntimeError, match=expected):
+        mcp_server.create_server(tmp_path)
