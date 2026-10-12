@@ -7,13 +7,28 @@ from pathlib import Path
 
 from brownfield_cartographer.query_api import QueryEngine
 
+SUPPORTED_MCP = "mcp>=1.26,<2"
+
+
+def _installed_mcp_version() -> str | None:
+    from importlib.metadata import PackageNotFoundError, version
+
+    try:
+        return version("mcp")
+    except PackageNotFoundError:
+        return None
+
 
 def create_server(repo_root: Path, index_dir: Path | None = None):
     try:
         from mcp.server.fastmcp import FastMCP
         from mcp.types import ToolAnnotations
     except ImportError as exc:
-        raise RuntimeError("Install the mcp extra: uv sync --extra mcp") from exc
+        installed = _installed_mcp_version()
+        if installed is None:
+            raise RuntimeError('Install the mcp extra: pip install "brownfield-cartographer[mcp]"') from exc
+        raise RuntimeError(f'mcp {installed} is installed, but Cartographer requires {SUPPORTED_MCP}; '
+                           f'install a supported version: pip install "{SUPPORTED_MCP}"') from exc
     engine = QueryEngine.open(repo_root, index_dir)
     server = FastMCP("Brownfield Cartographer", instructions=(
         "Read-only local repository facts. Responses describe the indexed snapshot. "
