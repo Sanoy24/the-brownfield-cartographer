@@ -19,6 +19,9 @@ versions may contain breaking changes.
 
 ### Changed
 
+- The MCP server uses MCP Python SDK 2.x; the `mcp` extra now requires
+  `mcp>=2.3,<3`. Tool names, arguments, and results are unchanged. Tool calls
+  are serialized because the SDK runs handlers on worker threads.
 - Dead-code candidates for JavaScript/TypeScript modules use resolved imports.
 
 ## [0.3.0] - 2026-10-12
