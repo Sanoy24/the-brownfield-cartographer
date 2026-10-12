@@ -7,6 +7,12 @@ versions may contain breaking changes.
 
 ## [Unreleased]
 
+### Added
+
+- Accuracy benchmark: pinned dbt (jaffle_shop), Python import and SQL lineage
+  corpora with hand-written expected results, scored by `scripts/benchmark.py`
+  and checked in CI.
+
 ## [0.3.0] - 2026-10-12
 
 First release published to PyPI as `brownfield-cartographer`.

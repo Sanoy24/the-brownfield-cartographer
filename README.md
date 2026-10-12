@@ -133,6 +133,10 @@ as fully analyzed. No repository source code is executed by local analysis.
 See [dbt artifact ingestion](docs/DBT.md) for supported manifest versions,
 dataset identifiers, artifact freshness, and scanner limits.
 
+The [accuracy benchmark](benchmarks/README.md) scores extraction against
+hand-written expected results for pinned dbt, Python and SQL corpora, including
+known gaps. It runs in CI.
+
 ## Development and branching
 
 ```sh
