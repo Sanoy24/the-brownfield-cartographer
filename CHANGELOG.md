@@ -7,6 +7,11 @@ versions may contain breaking changes.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-12
+
+Adds JavaScript/TypeScript structure and an accuracy benchmark. The `mcp` extra
+now requires MCP Python SDK 2.x.
+
 ### Added
 
 - Accuracy benchmark: pinned dbt (jaffle_shop), Python import and SQL lineage
@@ -71,6 +76,7 @@ First release published to PyPI as `brownfield-cartographer`.
 - Distinct transformation IDs and statement-specific SQL sources and targets.
 - Failed or partial runs no longer advance the successful checkpoint.
 
-[Unreleased]: https://github.com/Sanoy24/the-brownfield-cartographer/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/Sanoy24/the-brownfield-cartographer/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/Sanoy24/the-brownfield-cartographer/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/Sanoy24/the-brownfield-cartographer/releases/tag/v0.3.0
 [0.2.0]: https://github.com/Sanoy24/the-brownfield-cartographer/tree/6079f70
