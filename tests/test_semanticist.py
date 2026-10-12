@@ -7,11 +7,14 @@ using mock data that simulates real codebase analysis results.
 
 from __future__ import annotations
 
-import pytest
 import importlib.util
 
-from brownfield_cartographer.agents.semanticist import ContextWindowBudget, cluster_into_domains
+import pytest
 
+from brownfield_cartographer.agents.semanticist import (
+    ContextWindowBudget,
+    cluster_into_domains,
+)
 
 # ---------------------------------------------------------------------------
 # Tests: ContextWindowBudget

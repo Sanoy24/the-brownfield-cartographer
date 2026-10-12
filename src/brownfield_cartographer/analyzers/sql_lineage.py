@@ -2,12 +2,16 @@
 from __future__ import annotations
 
 from pathlib import Path
+
 import sqlglot
 from sqlglot import exp
 from sqlglot.optimizer.scope import traverse_scope
 from sqlglot.tokens import TokenType
 
-from brownfield_cartographer.models.schemas import TransformationNode, TransformationType
+from brownfield_cartographer.models.schemas import (
+    TransformationNode,
+    TransformationType,
+)
 
 SUPPORTED_DIALECTS = ("postgres", "bigquery", "snowflake", "duckdb", "sqlite")
 DEFAULT_DIALECT = "duckdb"

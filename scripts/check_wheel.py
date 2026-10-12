@@ -8,12 +8,11 @@ from __future__ import annotations
 
 import argparse
 import os
-from pathlib import Path
 import subprocess
 import sys
 import tempfile
 import tomllib
-
+from pathlib import Path
 
 PROBE = r'''
 import importlib.metadata

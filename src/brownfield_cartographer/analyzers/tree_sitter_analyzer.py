@@ -8,18 +8,19 @@ on file extension, enabling unified analysis across polyglot codebases.
 
 from __future__ import annotations
 
-import logging
 import ast
+import logging
 from pathlib import Path
-from typing import Optional
 
 import tree_sitter_python as tspython
-from tree_sitter import Language, Parser, Node, Query, QueryCursor
+from tree_sitter import Language, Node, Parser, Query, QueryCursor
 
 from brownfield_cartographer.models.schemas import (
     FunctionNode,
-    Language as LangEnum,
     ModuleNode,
+)
+from brownfield_cartographer.models.schemas import (
+    Language as LangEnum,
 )
 
 logger = logging.getLogger(__name__)
@@ -50,7 +51,7 @@ def detect_language(file_path: Path) -> LangEnum:
     return EXTENSION_MAP.get(file_path.suffix.lower(), LangEnum.UNKNOWN)
 
 
-def get_parser(lang: LangEnum) -> Optional[Parser]:
+def get_parser(lang: LangEnum) -> Parser | None:
     """
     Create a tree-sitter parser for the given language.
 
@@ -121,8 +122,8 @@ def _extract_functions(
 ) -> list[FunctionNode]:
     """
     Use Tree-sitter Query API to extract function definitions.
-    
-    Note: Still uses a recursive walk for class-level functions to 
+
+    Note: Still uses a recursive walk for class-level functions to
     maintain qualified naming (Class.method) correctly.
     """
     functions: list[FunctionNode] = []
@@ -137,7 +138,7 @@ def _extract_functions(
                     continue
                 name = name_node.text.decode("utf-8")
                 qualified = f"{class_prefix}{name}" if class_prefix else name
-                
+
                 # Extract the signature line
                 first_line = source_code[
                     child.start_byte : child.end_byte
@@ -231,7 +232,7 @@ def _compute_comment_ratio(source_code: str) -> float:
 # Public API
 # ---------------------------------------------------------------------------
 
-def analyze_module(file_path: Path, repo_root: Path) -> Optional[ModuleNode]:
+def analyze_module(file_path: Path, repo_root: Path) -> ModuleNode | None:
     """
     Perform full structural analysis on a single source file.
 

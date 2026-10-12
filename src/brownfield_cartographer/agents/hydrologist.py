@@ -8,8 +8,8 @@ and YAML configuration files.
 
 from __future__ import annotations
 
-import logging
 import ast
+import logging
 import re
 from collections import deque
 from pathlib import Path
@@ -17,17 +17,21 @@ from typing import Any
 
 import networkx as nx
 
-from brownfield_cartographer.analyzers.dag_config_parser import parse_airflow_dag, parse_dbt_project
+from brownfield_cartographer.analyzers.dag_config_parser import (
+    parse_airflow_dag,
+    parse_dbt_project,
+)
 from brownfield_cartographer.analyzers.dbt_manifest import parse_dbt_manifest
-from brownfield_cartographer.analyzers.sql_lineage import analyze_sql_file, analyze_sql_string
+from brownfield_cartographer.analyzers.sql_lineage import (
+    analyze_sql_file,
+)
 from brownfield_cartographer.graph.knowledge_graph import KnowledgeGraph
-from brownfield_cartographer.scanner import ScanResult, scan_repository
 from brownfield_cartographer.models.schemas import (
     DatasetNode,
-    StorageType,
     TransformationNode,
     TransformationType,
 )
+from brownfield_cartographer.scanner import ScanResult, scan_repository
 
 logger = logging.getLogger(__name__)
 

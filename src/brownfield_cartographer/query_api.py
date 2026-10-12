@@ -1,9 +1,9 @@
 """One bounded, deterministic query service for Python, CLI, and MCP."""
 from __future__ import annotations
 
-from collections import deque
 import hashlib
 import json
+from collections import deque
 from pathlib import Path
 from typing import Any, Literal
 
@@ -42,7 +42,7 @@ class QueryEngine:
         self.summary_stamp: tuple[int, int, int, int] | None = None
 
     @classmethod
-    def open(cls, repo_root: Path, index_dir: Path | None = None) -> "QueryEngine":
+    def open(cls, repo_root: Path, index_dir: Path | None = None) -> QueryEngine:
         try:
             return cls._open(repo_root, index_dir)
         except QueryError:
@@ -51,7 +51,7 @@ class QueryEngine:
             raise QueryError("Cannot read analysis artifacts; run cartographer analyze again") from exc
 
     @classmethod
-    def _open(cls, repo_root: Path, index_dir: Path | None = None) -> "QueryEngine":
+    def _open(cls, repo_root: Path, index_dir: Path | None = None) -> QueryEngine:
         if repo_root.is_symlink() or repo_root.is_junction():
             raise QueryError("Repository root must not be a symlink or junction")
         repo_root = repo_root.resolve(strict=True)

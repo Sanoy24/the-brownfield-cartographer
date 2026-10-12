@@ -1,8 +1,8 @@
 """Atomic writes for individual index and checkpoint artifacts."""
 import json
 import os
-from pathlib import Path
 import tempfile
+from pathlib import Path
 
 
 def write_json(path: Path, value: dict) -> None:

@@ -6,7 +6,32 @@ authors = [
     { name = "Yonas Mekonnen", email = "myonas886@gmail.com" }
 ]
 readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
 requires-python = ">=3.12"
+keywords = [
+    "codebase-analysis",
+    "static-analysis",
+    "data-lineage",
+    "dbt",
+    "dependency-graph",
+    "mcp",
+    "code-intelligence",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: SQL",
+    "Topic :: Software Development :: Quality Assurance",
+    "Topic :: Database",
+    "Typing :: Typed",
+]
 dependencies = [
     # Core
     "typer>=0.12",
@@ -14,18 +39,21 @@ dependencies = [
     "networkx>=3.3",
     "rich>=13.0",
     "PyYAML>=6.0",
-    "gitpython>=3.1",
     "pathspec>=0.12,<1",
     # Static analysis
     "tree-sitter>=0.23",
     "tree-sitter-python>=0.23",
     "sqlglot>=25.0",
-    # Graph analysis
+    # Graph analysis (NetworkX PageRank backend)
     "numpy>=1.26",
     "scipy>=1.14",
-    # Environment
-    "python-dotenv>=1.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/Sanoy24/the-brownfield-cartographer"
+Documentation = "https://github.com/Sanoy24/the-brownfield-cartographer#readme"
+Issues = "https://github.com/Sanoy24/the-brownfield-cartographer/issues"
+Changelog = "https://github.com/Sanoy24/the-brownfield-cartographer/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
 mcp = ["mcp>=1.26,<2"]
@@ -46,15 +74,20 @@ dev = ["pytest>=8,<10", "ruff>=0.11", "mypy>=1.15"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 
+[tool.ruff]
+target-version = "py312"
+
 [tool.ruff.lint]
-select = ["E9", "F63", "F7", "F82"]
+select = ["E", "F", "W", "I", "B", "UP"]
+# Long lines are tolerated in legacy modules; formatting is not yet enforced.
+ignore = ["E501", "B008", "UP042"]
 
 [project.scripts]
 cartographer = "brownfield_cartographer.cli:app"
 cartographer-mcp = "brownfield_cartographer.mcp_server:main"
 
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling>=1.27"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]

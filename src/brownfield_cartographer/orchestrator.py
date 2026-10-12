@@ -1,15 +1,15 @@
 """Local-first pipeline and successful-snapshot checkpoint management."""
 from __future__ import annotations
 
-from datetime import datetime, timezone
 import hashlib
 import json
 import logging
 import os
-from pathlib import Path
 import subprocess
 import tempfile
 import time
+from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
@@ -62,7 +62,7 @@ def _clone_repo(url: str, target_dir: Path) -> Path:
 def _checkpoint_key(repo_root: Path, inventory: ScanResult, settings: ScanSettings) -> dict:
     return {"analysis_version": ANALYSIS_VERSION, "repository": str(repo_root),
             "settings": vars(settings), "fingerprints": inventory.fingerprints,
-            "velocity_date": datetime.now(timezone.utc).date().isoformat()}
+            "velocity_date": datetime.now(UTC).date().isoformat()}
 
 
 def _check_incremental(cartography_dir: Path, repo_root: Path,

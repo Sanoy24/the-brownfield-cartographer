@@ -15,13 +15,10 @@ import subprocess
 from collections import Counter
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Optional
-
-import networkx as nx
+from typing import Any
 
 from brownfield_cartographer.analyzers.tree_sitter_analyzer import (
     analyze_module,
-    detect_language,
     extract_functions_from_file,
 )
 from brownfield_cartographer.graph.knowledge_graph import KnowledgeGraph
@@ -383,7 +380,7 @@ class Surveyor:
         return summary
 
 
-def _resolve_import(import_name: str, known_paths: set[str], importer: str = "") -> Optional[str]:
+def _resolve_import(import_name: str, known_paths: set[str], importer: str = "") -> str | None:
     """
     Attempt to resolve a Python import name to a known module file path.
 
