@@ -1,0 +1,14 @@
+{
+  "description": "dbt-labs/jaffle_shop at fd7bfacae4f497ff044a6a0275268676bf1b64c3; lineage read from each model's ref() calls.",
+  "status": "complete",
+  "lineage": [
+    ["raw_customers", "stg_customers"],
+    ["raw_orders", "stg_orders"],
+    ["raw_payments", "stg_payments"],
+    ["stg_customers", "customers"],
+    ["stg_orders", "customers"],
+    ["stg_payments", "customers"],
+    ["stg_orders", "orders"],
+    ["stg_payments", "orders"]
+  ]
+}
