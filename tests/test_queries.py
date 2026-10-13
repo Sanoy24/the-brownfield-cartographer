@@ -46,6 +46,25 @@ def test_cli_json_matches_python(indexed_repo, command, args, method, kwargs):
     assert json.loads(result.stdout) == getattr(QueryEngine.open(indexed_repo), method)(**kwargs)
 
 
+def test_interactive_query_uses_shared_engine(indexed_repo):
+    script = "find run\nimpact producer.py\nlineage-down schema.raw\ncontext consumer.py 2 3\nbogus\nimpact\nimpact nowhere.py\nquit\n"
+    result = CliRunner().invoke(app, ["query", str(indexed_repo)], input=script)
+    assert result.exit_code == 0, result.output
+    assert "consumer.py::run" in result.output
+    assert "consumer.py:1-1" in result.output
+    assert "output" in result.output
+    assert "def run():" in result.output
+    assert "Unknown command: bogus" in result.output
+    assert "Usage: impact <target>" in result.output
+    assert "Target not found: nowhere.py" in result.output
+
+
+def test_interactive_query_ends_at_end_of_input(indexed_repo):
+    result = CliRunner().invoke(app, ["query", str(indexed_repo)], input="overview\n")
+    assert result.exit_code == 0, result.output
+    assert "get_architecture" in result.output
+
+
 def test_version_reports_installed_distribution():
     from importlib.metadata import version
 

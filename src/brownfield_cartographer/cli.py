@@ -1,9 +1,8 @@
 """
 CLI entry point for The Brownfield Cartographer.
 
-Provides the `cartographer` commands:
-  - analyze: Ingest a local or remote repo and generate cartography artifacts
-  - query:   Interactively query a previously analyzed codebase
+Provides the `cartographer` commands: analyze, overview, find, impact,
+lineage, and an interactive query loop, all backed by QueryEngine.
 """
 
 from __future__ import annotations
@@ -17,7 +16,6 @@ from pathlib import Path
 import typer
 from rich.console import Console
 from rich.logging import RichHandler
-from rich.prompt import Prompt
 from rich.table import Table
 
 from brownfield_cartographer.orchestrator import Orchestrator
@@ -126,107 +124,72 @@ def analyze(
 
 
 @app.command()
-def query(
-    path: str = typer.Argument(
-        ".",
-        help="Path to a directory containing .cartography/ artifacts (default: current directory)",
-    ),
-    verbose: bool = typer.Option(
-        False,
-        "--verbose", "-v",
-        help="Enable debug logging",
-    ),
-) -> None:
+def query(repo: Path = typer.Argument(Path("."), help="Previously analyzed repository"),
+          index_dir: Path | None = typer.Option(None, "--index-dir")) -> None:
     """
-    Interactively query a previously analyzed codebase.
+    Interactively query a previously analyzed repository.
 
-    Opens a deterministic REPL for exploring a previously saved graph.
-
-    Commands:
-      find <concept>        — Search for implementations
-      lineage <dataset>     — Trace upstream data lineage
-      lineage-down <dataset>— Trace downstream lineage
-      blast <module>        — Show blast radius
-      explain <path>        — Explain a module
-      summary               — Show graph summary
-
-    Requires .cartography/ artifacts from a prior `analyze` run.
-    Model credentials are not used by this command.
+    Uses the same query engine as the other commands and the MCP server.
+    Type `help` for commands and `quit` to exit.
     """
-    _setup_logging(verbose)
-
-    from brownfield_cartographer.agents.navigator import run_interactive
-    from brownfield_cartographer.graph.knowledge_graph import KnowledgeGraph
-
-    base_path = Path(path).resolve()
-    cartography_dir = base_path / ".cartography"
-
-    if not cartography_dir.exists():
-        # Maybe the path provided IS the artifact directory?
-        if (base_path / "module_graph.json").exists():
-            cartography_dir = base_path
-        else:
-            console.print(
-                f"[bold red]Error:[/bold red] No .cartography/ directory found at {base_path}\n"
-                f"[dim]Run `cartographer analyze <repo>` first to generate artifacts.[/dim]"
-            )
-            raise typer.Exit(code=1)
-
-    # Multi-repo support: check for subdirectories (repo folders)
-    repos = [d for d in cartography_dir.iterdir() if d.is_dir() and (d / "module_graph.json").exists()]
-
-    target_dir = cartography_dir
-    if repos:
-        if len(repos) == 1:
-            target_dir = repos[0]
-            console.print(f"Selecting only repo found: [bold]{target_dir.name}[/bold]")
-        else:
-            console.print("\n[bold]Select a repository to query:[/bold]")
-            for i, repo_dir in enumerate(repos, 1):
-                console.print(f"  {i}. [cyan]{repo_dir.name}[/cyan]")
-
-            choice = Prompt.ask(
-                "\nEnter number",
-                choices=[str(i) for i in range(1, len(repos) + 1)],
-                default="1"
-            )
-            target_dir = repos[int(choice) - 1]
-
-    console.print(f"Loading knowledge graph from [bold cyan]{target_dir}[/bold cyan]…")
-    summary_path = target_dir / "analysis_summary.json"
-    if summary_path.exists():
+    engine = _query_engine(repo, index_dir)
+    if engine.run_status in {"partial", "failed"}:
+        console.print(f"Warning: the index status is {engine.run_status}; check coverage in results.", markup=False)
+    console.print(_REPL_HELP, markup=False)
+    while True:
         try:
-            run_status = json.loads(summary_path.read_text(encoding="utf-8")).get("status")
-            if run_status in {"partial", "failed"}:
-                console.print("Warning: this index has incomplete coverage; inspect analysis_summary.json.", markup=False)
-        except (OSError, ValueError):
-            console.print("Warning: run diagnostics could not be read.", markup=False)
+            line = input("cartographer> ").strip()
+        except (EOFError, KeyboardInterrupt):
+            console.print()
+            return
+        if not line:
+            continue
+        command, _, argument = line.partition(" ")
+        argument = argument.strip()
+        if command in {"quit", "exit"}:
+            return
+        if command == "help":
+            console.print(_REPL_HELP, markup=False)
+            continue
+        if command not in _REPL_COMMANDS:
+            console.print(f"Unknown command: {command}. Type help for commands.", markup=False)
+            continue
+        method, usage, build = _REPL_COMMANDS[command]
+        if usage and not argument:
+            console.print(f"Usage: {command} {usage}", markup=False)
+            continue
+        try:
+            _show_result(getattr(engine, method)(**build(argument)), as_json=False)
+        except (ValueError, OSError) as exc:
+            console.print(f"Error: {exc}", markup=False)
 
-    try:
-        kg = KnowledgeGraph.from_artifacts(target_dir)
-    except Exception as exc:
-        console.print(f"[bold red]Failed to load graph:[/bold red] {exc}")
-        raise typer.Exit(code=1) from None
 
-    summary = kg.summary()
-    if summary['total_nodes'] == 0:
-        console.print(
-            "[bold yellow]Warning:[/bold yellow] Loaded graph is empty. "
-            "The analysis might have failed or found no source files."
-        )
-    else:
-        console.print(
-            f"  Loaded: {summary['modules']} modules, "
-            f"{summary['datasets']} datasets, "
-            f"{summary['total_nodes']} nodes, "
-            f"{summary['total_edges']} edges"
-        )
+def _context_arguments(argument: str) -> dict:
+    path, *lines = argument.split()
+    numbers = [int(value) for value in lines[:2]]
+    return {"path": path, **dict(zip(("start_line", "end_line"), numbers, strict=False))}
 
-    run_interactive(kg)
+
+_REPL_COMMANDS = {
+    "find": ("find_symbol", "<text>", lambda a: {"pattern": a}),
+    "impact": ("analyze_impact", "<target>", lambda a: {"target": a}),
+    "blast": ("analyze_impact", "<target>", lambda a: {"target": a}),
+    "deps": ("trace_dependencies", "<module-or-function>", lambda a: {"target": a}),
+    "dependents": ("trace_dependencies", "<module-or-function>", lambda a: {"target": a, "direction": "dependents"}),
+    "lineage": ("trace_data_lineage", "<dataset>", lambda a: {"dataset": a}),
+    "lineage-down": ("trace_data_lineage", "<dataset>", lambda a: {"dataset": a, "direction": "downstream"}),
+    "context": ("get_code_context", "<path> [start] [end]", _context_arguments),
+    "overview": ("get_architecture", "", lambda a: {}),
+    "summary": ("get_architecture", "", lambda a: {}),
+}
+_REPL_HELP = (
+    "Commands: find <text> | impact <target> | deps <target> | dependents <target> | "
+    "lineage <dataset> | lineage-down <dataset> | context <path> [start] [end] | overview | help | quit"
+)
 
 
 def main() -> None:
-    """Entry point for `python -m src.cli`."""
+    """Entry point for `python -m brownfield_cartographer.cli`."""
     app()
 
 

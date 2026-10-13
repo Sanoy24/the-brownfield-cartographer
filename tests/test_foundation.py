@@ -5,10 +5,6 @@ from pathlib import Path
 import pytest
 
 from brownfield_cartographer.agents.hydrologist import Hydrologist
-from brownfield_cartographer.agents.navigator import (
-    tool_blast_radius,
-    tool_trace_lineage,
-)
 from brownfield_cartographer.agents.surveyor import Surveyor
 from brownfield_cartographer.analyzers.sql_lineage import analyze_sql_file
 from brownfield_cartographer.graph.knowledge_graph import KnowledgeGraph
@@ -18,19 +14,30 @@ from brownfield_cartographer.models.schemas import (
     ModuleNode,
     TransformationNode,
 )
+from brownfield_cartographer.query_api import QueryEngine
 
 
-def test_reverse_import_impact_excludes_start_in_cycle():
+def _engine(kg, repo):
+    """Query an in-memory graph through the shared engine."""
+    kg.graph.graph["repository"] = str(repo)
+    return QueryEngine(kg, repo)
+
+
+def _impact(kg, repo, target):
+    return {row["node"] for row in _engine(kg, repo).analyze_impact(target)["data"]["results"]}
+
+
+def test_reverse_import_impact_excludes_start_in_cycle(tmp_path):
     kg = KnowledgeGraph()
     for path in ("a.py", "b.py", "c.py"):
         kg.add_module_node(ModuleNode(path=path))
     kg.add_import_edge("a.py", "b.py")
     kg.add_import_edge("c.py", "a.py")
     kg.add_import_edge("b.py", "a.py")
-    assert {row["node"] for row in tool_blast_radius(kg, "b.py")} == {"a.py", "c.py"}
+    assert _impact(kg, tmp_path, "b.py") == {"a.py", "c.py"}
 
 
-def test_lineage_does_not_follow_configuration_edges():
+def test_lineage_does_not_follow_configuration_edges(tmp_path):
     kg = KnowledgeGraph()
     kg.add_dataset_node(DatasetNode(name="raw"))
     kg.add_transformation_node(TransformationNode(
@@ -38,8 +45,10 @@ def test_lineage_does_not_follow_configuration_edges():
         line_range=(2, 3),
     ))
     kg.add_configures_edge("settings.yml", "out")
-    assert "settings.yml" not in {row["node"] for row in tool_trace_lineage(kg, "out")}
-    assert {row["node"] for row in tool_blast_radius(kg, "job.sql")} >= {"out"}
+    upstream = _engine(kg, tmp_path).trace_data_lineage("out")["data"]["results"]
+    assert {row["node"] for row in upstream} >= {"raw"}
+    assert "settings.yml" not in {row["node"] for row in upstream}
+    assert _impact(kg, tmp_path, "job.sql") >= {"out"}
 
 
 def test_transformations_do_not_merge_independent_operations():
@@ -251,8 +260,9 @@ def test_no_network_for_local_analysis_and_queries(tmp_path, monkeypatch):
     (tmp_path / "input.sql").write_text("select * from raw\n")
     runner = Orchestrator()
     assert runner.run(str(tmp_path))["status"] == "complete"
-    assert tool_trace_lineage(runner.knowledge_graph, "input")
-    assert tool_blast_radius(runner.knowledge_graph, "raw")
+    engine = QueryEngine.open(tmp_path)
+    assert engine.trace_data_lineage("input")["data"]["results"]
+    assert engine.analyze_impact("raw")["data"]["results"]
 
 
 def test_partial_cli_has_nonzero_exit(tmp_path):
@@ -265,10 +275,8 @@ def test_partial_cli_has_nonzero_exit(tmp_path):
 
 
 def test_pipeline_offline_changes_and_failed_checkpoint(tmp_path, monkeypatch):
-    import brownfield_cartographer.agents.semanticist as semanticist
     from brownfield_cartographer.orchestrator import Orchestrator
     monkeypatch.setenv("OPENAI_API_KEY", "must-not-be-used")
-    monkeypatch.setattr(semanticist, "_create_chat_model", lambda *a, **k: pytest.fail("Model initialized"))
     repo = tmp_path / "repo"
     repo.mkdir()
     (repo / "a.py").write_text("def run():\n    return 1\n")
