@@ -42,6 +42,9 @@ cartographer analyze /path/to/repository
 # Force a fresh rebuild or choose an output root.
 cartographer analyze /path/to/repository --full -o ./results
 
+# Optional: pin the SQL dialect instead of choosing the best fit per file.
+cartographer analyze /path/to/repository --dialect bigquery
+
 # Optional: use a previously generated dbt v12 manifest.
 cartographer analyze /path/to/dbt-project --dbt-manifest target/manifest.json
 ```
@@ -125,7 +128,7 @@ unchanged successful snapshots can reuse the complete index.
 | Input | Current support |
 | --- | --- |
 | Python | Functions/classes, supported absolute/relative imports; conservative literal I/O associations (pandas, Spark readers and writers). SQL passed to `execute`/`executemany`/`executescript`, `.sql()` and `read_sql` is parsed from literals and same-module constants, including `text()` and DB-API placeholders. Dynamic SQL is reported, not guessed; constants imported from other modules are not resolved |
-| SQL | SELECT/UNION, CTAS, INSERT, UPDATE, DELETE and MERGE; statement spans and table dependencies. DDL and transaction statements without table lineage are skipped; other statements, such as COPY, are reported individually without dropping the rest of the file |
+| SQL | SELECT/UNION, CTAS, INSERT, UPDATE, DELETE and MERGE; statement spans and table dependencies. DDL and transaction statements without table lineage are skipped; other statements, such as COPY, are reported individually without dropping the rest of the file. Each file is parsed with the best-fitting dialect (DuckDB, BigQuery, Snowflake, Postgres, MySQL, Spark, T-SQL, Trino), recorded as `sql:<dialect>` in evidence; `--dialect` pins one |
 | dbt | Explicit manifest v12 ingestion for models, seeds, snapshots and sources; basic SQL/YAML fallback without a manifest. Projects are found anywhere in the repository, including several per repository |
 | Airflow | Experimental, limited task dependency regex |
 | JavaScript/TypeScript | `.js .mjs .cjs .jsx .ts .mts .cts .tsx`: functions, arrow functions, class methods; ESM, type-only, `require()` and `import()` imports with literal relative specifiers. Package imports are external; tsconfig path aliases are not resolved |
