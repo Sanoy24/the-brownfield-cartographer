@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "cartographer": {
+      "command": "uvx",
+      "args": [
+        "--from",
+        "brownfield-cartographer[mcp]==0.7.0",
+        "cartographer-mcp",
+        "--repo",
+        "${CLAUDE_PROJECT_DIR}"
+      ]
+    }
+  }
+}

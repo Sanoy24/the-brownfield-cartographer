@@ -1,0 +1,17 @@
+{
+  "name": "brownfield-cartographer",
+  "description": "Brownfield Cartographer: local, evidence-backed impact and data lineage for coding agents.",
+  "owner": {
+    "name": "Yonas Mekonnen",
+    "url": "https://github.com/Sanoy24"
+  },
+  "plugins": [
+    {
+      "name": "brownfield-cartographer",
+      "source": "./plugin",
+      "description": "What breaks if I change this? Table, column and Airflow impact across SQL, dbt, Python and TypeScript, computed locally with file and line evidence.",
+      "category": "data",
+      "tags": ["data-lineage", "dbt", "airflow", "sql", "impact-analysis", "mcp"]
+    }
+  ]
+}
