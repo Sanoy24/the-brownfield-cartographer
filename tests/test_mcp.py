@@ -38,6 +38,10 @@ def test_read_only_stdio_tools(tmp_path):
                 assert context.structured_content["data"]["content"] == "def run():\n    return 1"
                 refused = await session.call_tool("get_code_context", {"path": "../secret.py"})
                 assert refused.is_error
+                # The reason must reach the assistant so it can correct the call.
+                assert "repository-relative" in refused.content[0].text
+                missing = await session.call_tool("analyze_impact", {"target": "nowhere.py"})
+                assert missing.is_error and "Target not found: nowhere.py" in missing.content[0].text
                 # SDK v2 runs sync handlers on worker threads; concurrent calls must stay consistent.
                 calls = [("find_symbol", {"pattern": "run"}), ("get_architecture", {}),
                          ("analyze_impact", {"target": "source.py"})] * 4

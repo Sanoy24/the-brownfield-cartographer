@@ -224,9 +224,17 @@ class QueryEngine:
         self._refresh()
         if direction not in {"dependencies", "dependents"}:
             raise QueryError("Direction must be dependencies or dependents")
-        start = self._node(target, {"module", "function"})
+        start = self._node(target, {"module", "function", "task"})
         def neighbors(node):
             g = self.graph.graph
+            if g.nodes[node].get("node_type") == "task":
+                # Task order: dependencies run before this task, dependents after it.
+                adjacent = g.predecessors(node) if direction == "dependencies" else g.successors(node)
+                for neighbor in adjacent:
+                    edge = g.edges[neighbor, node] if direction == "dependencies" else g.edges[node, neighbor]
+                    if edge.get("edge_type") == "SCHEDULES":
+                        yield neighbor, edge
+                return
             adjacent = g.successors(node) if direction == "dependencies" else g.predecessors(node)
             for neighbor in adjacent:
                 edge = g.edges[node, neighbor] if direction == "dependencies" else g.edges[neighbor, node]

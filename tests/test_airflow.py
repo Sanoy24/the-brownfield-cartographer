@@ -126,6 +126,13 @@ def test_tasks_are_not_datasets_and_impact_flows_through_them(tmp_path):
     assert {"task:dags/orders.py::orders_daily.load", "task:dags/orders.py::orders_daily.clean",
             "task:dags/orders.py::orders_daily.audit", "task:dags/orders.py::orders_daily.publish",
             "staging.orders"} <= impact
+    load = "task:dags/orders.py::orders_daily.load"
+    downstream = engine.trace_dependencies(load, direction="dependents")["data"]["results"]
+    assert {r["node"].split("::")[1] for r in downstream} == {
+        "orders_daily.clean", "orders_daily.aggregate", "orders_daily.report",
+        "orders_daily.audit", "orders_daily.publish"}
+    upstream = engine.trace_dependencies(load, direction="dependencies")["data"]["results"]
+    assert [r["node"].split("::")[1] for r in upstream] == ["orders_daily.extract"]
     found = engine.find_symbol("orders_daily.load")["data"]["matches"]
     assert found[0]["type"] == "task" and found[0]["evidence"]["line_range"] == [18, 18]
     assert engine.get_architecture()["data"]["counts"]["tasks"] == 9
