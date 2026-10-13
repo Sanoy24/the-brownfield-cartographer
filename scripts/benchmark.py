@@ -23,11 +23,16 @@ from brownfield_cartographer.graph.knowledge_graph import KnowledgeGraph
 from brownfield_cartographer.orchestrator import Orchestrator
 
 ROOT = Path(__file__).resolve().parent.parent / "benchmarks"
-KINDS = ("imports", "functions", "lineage")
+KINDS = ("imports", "functions", "lineage", "tasks", "schedules", "runs")
 
 
 def _key(fact) -> str:
     return " -> ".join(fact) if isinstance(fact, list | tuple) else fact
+
+
+def _task(node: str) -> str:
+    """`task:<file>::<dag>.<task>` -> `<dag>.<task>`."""
+    return node.split("::", 1)[1] if node.startswith("task:") else node
 
 
 def extract(index: Path) -> dict[str, set[str]]:
@@ -38,6 +43,15 @@ def extract(index: Path) -> dict[str, set[str]]:
     for source, target, data in graph.edges(data=True):
         if data.get("edge_type") == "IMPORTS":
             facts["imports"].add(_key((source, target)))
+        elif data.get("edge_type") == "SCHEDULES":
+            facts["schedules"].add(_key((_task(source), _task(target))))
+        elif data.get("edge_type") == "RUNS":
+            # A task running inline SQL points at a transformation; name it by the tables it writes.
+            written = sorted(v for _, v, d in graph.out_edges(target, data=True) if d.get("edge_type") == "PRODUCES")
+            facts["runs"].add(_key((_task(source), "writes " + ", ".join(written) if written else target)))
+    for node, data in graph.nodes(data=True):
+        if data.get("node_type") == "task":
+            facts["tasks"].add(_task(node))
     for node, data in graph.nodes(data=True):
         if data.get("node_type") == "function":
             facts["functions"].add(node)

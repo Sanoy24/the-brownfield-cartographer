@@ -18,10 +18,8 @@ from typing import Any
 import networkx as nx
 
 from brownfield_cartographer.analyzers import embedded_sql
-from brownfield_cartographer.analyzers.dag_config_parser import (
-    parse_airflow_dag,
-    parse_dbt_project,
-)
+from brownfield_cartographer.analyzers.airflow_dag import parse_airflow
+from brownfield_cartographer.analyzers.dag_config_parser import parse_dbt_project
 from brownfield_cartographer.analyzers.dbt_manifest import parse_dbt_manifest
 from brownfield_cartographer.analyzers.sql_lineage import (
     analyze_sql_file,
@@ -248,6 +246,7 @@ class Hydrologist:
             knowledge_graph.add_dataset_node(dataset)
         for transformation in all_transformations:
             knowledge_graph.add_transformation_node(transformation)
+        task_count = self._add_airflow(knowledge_graph)
 
         lineage_subgraph = knowledge_graph.get_lineage_subgraph()
         sources = self._find_sources(lineage_subgraph)
@@ -265,6 +264,7 @@ class Hydrologist:
             "diagnostics": self.diagnostics,
             "dbt_mode": self.dbt_mode,
             "dbt_projects": self.dbt_projects,
+            "airflow_tasks": task_count,
         }
         logger.info(
             "Hydrologist complete: %d transformations, %d sources, %d sinks",
@@ -341,11 +341,39 @@ class Hydrologist:
                 self.diagnostics.append({"path": py_file.relative_to(repo_root).as_posix(),
                                          "error": str(exc), "incomplete": True})
 
-        for dag_file in py_files:
-            if "dags" in dag_file.relative_to(repo_root).parts:
-                all_transformations.extend(parse_airflow_dag(dag_file, repo_root))
+        known_paths = {f.relative_to(repo_root).as_posix() for f in self.inventory.files}
+        self.airflow = []
+        for py_file in py_files:
+            relative = py_file.relative_to(repo_root).as_posix()
+            try:
+                parsed = parse_airflow(py_file.read_text(encoding="utf-8", errors="replace"),
+                                       relative, known_paths, dialect)
+            except (SyntaxError, ValueError, OSError) as exc:
+                self.diagnostics.append({"path": relative, "error": str(exc), "incomplete": True})
+                continue
+            if parsed is not None:
+                self.airflow.append((relative, parsed))
+                self.diagnostics.extend(parsed["diagnostics"])
 
         return all_transformations, all_datasets, len(sql_files), len(py_files)
+
+    def _add_airflow(self, knowledge_graph: KnowledgeGraph) -> int:
+        """Add tasks, scheduling order and what each task runs; return the task count."""
+        count = 0
+        for relative, parsed in self.airflow:
+            for task in parsed["tasks"]:
+                knowledge_graph.add_task_node(task, relative)
+                count += 1
+            for upstream, downstream, span in parsed["schedules"]:
+                knowledge_graph.add_task_edge(upstream, downstream, "SCHEDULES", relative, span)
+            for task, transformation in parsed["transformations"]:
+                tx_id = knowledge_graph.add_transformation_node(transformation)
+                knowledge_graph.add_task_edge(task, tx_id, "RUNS", relative, transformation.line_range)
+            for task, target, span in parsed["runs"]:
+                if not knowledge_graph.add_task_edge(task, target, "RUNS", relative, span):
+                    self.diagnostics.append({"path": relative, "line": span[0], "incomplete": False,
+                                             "error": f"Task {task} runs {target}, which is not indexed"})
+        return count
 
     @staticmethod
     def blast_radius(knowledge_graph: KnowledgeGraph, node_name: str) -> list[str]:

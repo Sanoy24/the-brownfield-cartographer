@@ -51,5 +51,5 @@ def test_pinned_corpora_match_expectations():
         expected = json.loads(expected_file.read_text(encoding="utf-8"))
         status, actual = benchmark.analyze(benchmark.ROOT / "corpora" / expected_file.stem)
         reports[expected_file.stem] = benchmark.score(expected, status, actual)
-    assert set(reports) == {"jaffle_shop_classic", "js_ts_app", "python_etl", "python_imports", "sql_warehouse"}
+    assert set(reports) == {"airflow_dags", "jaffle_shop_classic", "js_ts_app", "python_etl", "python_imports", "sql_warehouse"}
     assert [issue for name, report in reports.items() for issue in benchmark.problems(name, report)] == []

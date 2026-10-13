@@ -65,8 +65,8 @@ class KnowledgeGraph:
         self._function_nodes[function.qualified_name] = function
         self.graph.add_node(function.qualified_name, node_type="function", **function.model_dump(mode="json"))
 
-    def add_transformation_node(self, transformation: TransformationNode) -> None:
-        """Register a data transformation and create lineage edges."""
+    def add_transformation_node(self, transformation: TransformationNode) -> str:
+        """Register a data transformation, create lineage edges, and return its node id."""
         # Include operation identity: multiple statements/tasks can share a span.
         identity = json.dumps(transformation.model_dump(mode="json"), sort_keys=True)
         tx_id = (
@@ -106,6 +106,28 @@ class KnowledgeGraph:
             if tgt_dataset not in self.graph:
                 self.add_dataset_node(DatasetNode(name=tgt_dataset))
             self.graph.add_edge(tx_id, tgt_dataset, edge_type="PRODUCES", **evidence)
+        return tx_id
+
+    def add_task_node(self, task: dict, source_file: str) -> None:
+        """Register an orchestration task (not a dataset) defined in source_file."""
+        self._require_node_type(task["id"], "task")
+        start, end = task["lines"]
+        self.graph.add_node(task["id"], node_type="task", dag_id=task["dag_id"], task_id=task["task_id"],
+                            operator=task["operator"], source_file=source_file, line_start=start, line_end=end,
+                            analysis_method="airflow_ast", confidence="syntax")
+        if source_file not in self.graph:
+            self.add_module_node(ModuleNode(path=source_file))
+        self.graph.add_edge(source_file, task["id"], edge_type="DEFINES", source_file=source_file,
+                            line_range=[start, end], analysis_method="airflow_ast", confidence="syntax")
+
+    def add_task_edge(self, source: str, target: str, edge_type: str, source_file: str,
+                      line_range: tuple[int, int]) -> bool:
+        """Add SCHEDULES (task -> downstream task) or RUNS (task -> code it executes) when both ends exist."""
+        if source not in self.graph or target not in self.graph:
+            return False
+        self.graph.add_edge(source, target, edge_type=edge_type, source_file=source_file,
+                            line_range=list(line_range), analysis_method="airflow_ast", confidence="syntax")
+        return True
 
     # ------------------------------------------------------------------
     # Edge insertion
@@ -141,11 +163,12 @@ class KnowledgeGraph:
         """Potential consumers, respecting the semantics of each relationship."""
         for neighbor in self.graph.predecessors(node):
             edge = self.graph.edges[neighbor, node]
-            if edge.get("edge_type") in {"IMPORTS", "CALLS"}:
+            # Changing code affects importers, callers, and tasks that run it.
+            if edge.get("edge_type") in {"IMPORTS", "CALLS", "RUNS"}:
                 yield neighbor, edge
         for neighbor in self.graph.successors(node):
             edge = self.graph.edges[node, neighbor]
-            if edge.get("edge_type") in {"CONSUMES", "PRODUCES", "DEFINES", "CONFIGURES"}:
+            if edge.get("edge_type") in {"CONSUMES", "PRODUCES", "DEFINES", "CONFIGURES", "SCHEDULES"}:
                 yield neighbor, edge
 
     def lineage_neighbors(self, node: str, direction: str):
@@ -160,7 +183,7 @@ class KnowledgeGraph:
     def clear_lineage(self) -> None:
         """Remove observations owned by lineage extractors before a safe rebuild."""
         nodes = [n for n, d in self.graph.nodes(data=True)
-                 if d.get("node_type") in {"dataset", "transformation", "config"}]
+                 if d.get("node_type") in {"dataset", "transformation", "config", "task"}]
         self.graph.remove_nodes_from(nodes)
         self._dataset_nodes.clear()
         self._transformation_nodes.clear()
@@ -483,6 +506,7 @@ class KnowledgeGraph:
             "datasets": len(self._dataset_nodes),
             "functions": len(self._function_nodes),
             "transformations": transformation_count,
+            "tasks": sum(1 for _, d in self.graph.nodes(data=True) if d.get("node_type") == "task"),
             "circular_dependencies": len(self.find_circular_dependencies(self.get_module_subgraph())),
         }
 
