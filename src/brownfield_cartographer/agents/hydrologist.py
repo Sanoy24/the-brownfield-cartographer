@@ -263,6 +263,7 @@ class Hydrologist:
             "lineage_edges": lineage_subgraph.number_of_edges(),
             "diagnostics": self.diagnostics,
             "dbt_mode": self.dbt_mode,
+            "dbt_projects": self.dbt_projects,
         }
         logger.info(
             "Hydrologist complete: %d transformations, %d sources, %d sinks",
@@ -281,7 +282,9 @@ class Hydrologist:
 
         dbt_files = set()
         manifest = self.inventory.dbt_manifest
-        dbt_project_file = repo_root / "dbt_project.yml"
+        project_roots = sorted({f.parent for f in self.inventory.files if f.name == "dbt_project.yml"},
+                               key=lambda p: p.relative_to(repo_root).as_posix())
+        self.dbt_projects = [p.relative_to(repo_root).as_posix() for p in project_roots]
         if manifest is not None:
             self.dbt_mode = "manifest_v12"
             try:
@@ -297,18 +300,27 @@ class Hydrologist:
             except (ValueError, TypeError, KeyError) as exc:
                 self.diagnostics.append({"path": manifest.relative_to(repo_root).as_posix(),
                                          "error": str(exc), "incomplete": True})
-        elif dbt_project_file in self.inventory.files:
+        elif project_roots:
             self.dbt_mode = "source_fallback"
-            logger.info("Detected dbt project — parsing model DAG")
-            dbt_results = parse_dbt_project(repo_root, source_files=self.inventory.files)
-            all_transformations.extend(dbt_results["transformations"])
-            all_datasets.extend(dbt_results["datasets"])
-            dbt_files.update(tx.source_file for tx in dbt_results["transformations"])
-            for edge in dbt_results["config_edges"]:
-                knowledge_graph.add_configures_edge(edge.source, edge.target)
+            for project_root in project_roots:
+                logger.info("Detected dbt project at %s — parsing model DAG", project_root)
+                try:
+                    dbt_results = parse_dbt_project(project_root, source_files=self.inventory.files,
+                                                    repo_root=repo_root)
+                except ValueError as exc:
+                    self.diagnostics.append({"path": (project_root / "dbt_project.yml").relative_to(repo_root).as_posix(),
+                                             "error": str(exc), "incomplete": True})
+                    continue
+                all_transformations.extend(dbt_results["transformations"])
+                all_datasets.extend(dbt_results["datasets"])
+                dbt_files.update(tx.source_file for tx in dbt_results["transformations"])
+                for edge in dbt_results["config_edges"]:
+                    knowledge_graph.add_configures_edge(edge.source, edge.target)
 
+        # SQL inside a dbt project (models, macros, tests, analyses) is Jinja, not plain SQL.
         sql_files = [f for f in self.inventory.files if f.suffix == ".sql"
-                     and f.relative_to(repo_root).as_posix() not in dbt_files]
+                     and f.relative_to(repo_root).as_posix() not in dbt_files
+                     and not any(f.is_relative_to(root) for root in project_roots)]
         for sql_file in sql_files:
             relative = sql_file.relative_to(repo_root).as_posix()
             errors: list[dict] = []

@@ -47,6 +47,14 @@ configuration, model SQL and schema YAML. It supports basic `ref`/`source`
 patterns and is less complete than dbt's own parsed artifact. Selecting a
 manifest does not enable model calls or uploads.
 
+Every `dbt_project.yml` in the repository is treated as a project root, so
+projects in subfolders (for example `analytics/dbt/`) and several projects in
+one repository are supported. The analysis summary lists them as
+`dbt_projects`. All `.sql` files inside a project (models, macros, tests,
+analyses, snapshots) are Jinja templates and are never parsed as plain SQL.
+Snapshots are not yet modeled. Model names are not namespaced by project, so
+two projects that define the same model name share one dataset node.
+
 Python callers use the same pipeline:
 
 ```python
