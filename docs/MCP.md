@@ -125,7 +125,7 @@ locations and server status controls.
 | `find_symbol` | Literal search pattern | Matching modules, functions and Airflow tasks with available source locations |
 | `trace_dependencies` | Qualified target, direction | Imports/calls toward dependencies or reverse dependents |
 | `analyze_impact` | Qualified target | Potential affected consumers, including Airflow tasks that run changed code and their downstream tasks; no guarantee of runtime failure |
-| `trace_data_lineage` | Dataset, upstream/downstream | Supported producers or consumers |
+| `trace_data_lineage` | Dataset or `dataset::column`, upstream/downstream | Supported producers or consumers; for a column, the source or derived columns |
 | `get_code_context` | Relative path, line range | Snapshot-checked source excerpt inside the repository |
 
 Responses include `schema_version`, `snapshot_id`, `status`, `coverage`,

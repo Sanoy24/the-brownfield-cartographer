@@ -13,6 +13,7 @@ evidence, for you and your coding agent.
 cartographer analyze .
 cartographer impact models/staging/stg_orders.sql   # what is downstream of this file?
 cartographer lineage customers --direction upstream # where does this table come from?
+cartographer lineage customers::first_order          # which source columns feed this column?
 ```
 
 Language servers and grep answer questions about code symbols. Cartographer
@@ -130,6 +131,7 @@ unchanged successful snapshots can reuse the complete index.
 | Python | Functions/classes, supported absolute/relative imports; conservative literal I/O associations (pandas, Spark readers and writers). SQL passed to `execute`/`executemany`/`executescript`, `.sql()` and `read_sql` is parsed from literals and same-module constants, including `text()` and DB-API placeholders. Dynamic SQL is reported, not guessed; constants imported from other modules are not resolved |
 | SQL | SELECT/UNION, CTAS, INSERT, UPDATE, DELETE and MERGE; statement spans and table dependencies. DDL and transaction statements without table lineage are skipped; other statements, such as COPY, are reported individually without dropping the rest of the file. Each file is parsed with the best-fitting dialect (DuckDB, BigQuery, Snowflake, Postgres, MySQL, Spark, T-SQL, Trino), recorded as `sql:<dialect>` in evidence; `--dialect` pins one |
 | dbt | Explicit manifest v12 ingestion for models, seeds, snapshots and sources; basic SQL/YAML fallback without a manifest. Projects are found anywhere in the repository, including several per repository |
+| Columns | Column-level lineage for `CREATE ... AS`, `INSERT ... SELECT` (including column lists) in SQL files, SQL embedded in Python, Airflow inline SQL, and dbt models whose only Jinja is `ref`/`source`/`config`/comments. Each edge is `copy` or `derived`. `SELECT *` over CTEs and subqueries is expanded; `SELECT *` over tables, unqualified columns in joins, and models with other Jinja are counted as unresolved, not guessed |
 | Airflow | Tasks from operators and `@task` functions in `with DAG`, `@dag` and `dag=` DAGs; order from `>>`/`<<`, lists, `set_downstream`, `chain()` and TaskFlow data passing, with line evidence. Tasks link to what they run: `python_callable`, `@task` functions, `sql=` files (including `template_searchpath`) and inline SQL lineage, and `python x.py` bash commands. Impact flows from code through tasks to downstream tasks. Tasks created in loops or with computed ids are reported, not guessed |
 | JavaScript/TypeScript | `.js .mjs .cjs .jsx .ts .mts .cts .tsx`: functions, arrow functions, class methods; ESM, type-only, `require()` and `import()` imports with literal relative specifiers. Package imports are external; tsconfig path aliases are not resolved |
 
