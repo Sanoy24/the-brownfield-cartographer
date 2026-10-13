@@ -222,7 +222,8 @@ class _DagVisitor:
                             source_datasets=statement["sources"], target_datasets=[statement["target"]],
                             transformation_type=TransformationType.SQL_QUERY, source_file=self.path,
                             line_range=span, sql_query_if_applicable=statement["text"][:500],
-                            analysis_method=f"airflow_sql:{statement['dialect']}", confidence="syntax")))
+                            analysis_method=f"airflow_sql:{statement['dialect']}", confidence="syntax",
+                            column_lineage=statement["columns"], unresolved_columns=statement["unresolved_columns"])))
                 for error in errors:
                     self._report(call, f"Task SQL at line {call.lineno}: {error['error']}", incomplete=True)
 

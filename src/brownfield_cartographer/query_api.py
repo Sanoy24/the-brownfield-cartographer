@@ -177,7 +177,7 @@ class QueryEngine:
             raise QueryError("Search text must contain 1-1000 characters")
         matches = []
         for node, attrs in sorted(self.graph.graph.nodes(data=True)):
-            if attrs.get("node_type") not in {"module", "function", "task"}:
+            if attrs.get("node_type") not in {"module", "function", "task", "column"}:
                 continue
             if pattern.lower() in node.lower() or any(pattern.lower() in name.lower() for name in attrs.get("classes", [])):
                 matches.append({"id": node, "type": attrs["node_type"],
@@ -243,7 +243,7 @@ class QueryEngine:
         self._refresh()
         if direction not in {"upstream", "downstream"}:
             raise QueryError("Direction must be upstream or downstream")
-        start = self._node(dataset, {"dataset"})
+        start = self._node(dataset, {"dataset", "column"})
         def neighbors(node):
             for neighbor in self.graph.lineage_neighbors(node, direction):
                 edge = self.graph.graph.edges[neighbor, node] if direction == "upstream" else self.graph.graph.edges[node, neighbor]

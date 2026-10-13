@@ -38,5 +38,47 @@
       "raw.refunds",
       "marts.order_summary"
     ]
+  ],
+  "columns": [
+    [
+      "raw.orders::id",
+      "staging.orders::id"
+    ],
+    [
+      "raw.orders::customer_id",
+      "staging.orders::customer_id"
+    ],
+    [
+      "raw.orders::ordered_at",
+      "staging.orders::ordered_at"
+    ],
+    [
+      "raw.customers::id",
+      "staging.customers::id"
+    ],
+    [
+      "raw.customers::name",
+      "staging.customers::name"
+    ],
+    [
+      "staging.customers::id",
+      "marts.customer_orders::id"
+    ],
+    [
+      "staging.orders::customer_id",
+      "marts.order_summary::customer_id"
+    ],
+    [
+      "raw.web_events::id",
+      "marts.all_events::id"
+    ],
+    [
+      "raw.app_events::id",
+      "marts.all_events::id"
+    ],
+    [
+      "marts.customer_orders::id",
+      "marts.top_customers::customer_id"
+    ]
   ]
 }

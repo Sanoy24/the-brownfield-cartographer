@@ -9,6 +9,17 @@ versions may contain breaking changes.
 
 ### Added
 
+- Column-level lineage. Columns are `dataset::column` nodes linked by
+  `DERIVES` edges marked `copy` or `derived`, with statement evidence. Built for
+  `CREATE ... AS` and `INSERT ... SELECT` (including column lists) in SQL
+  files, SQL embedded in Python, Airflow inline SQL, and dbt models whose only
+  Jinja is `ref`/`source`/`config`/comments. `SELECT *` over CTEs and subqueries
+  is expanded, and a single-source query's unqualified columns are attributed
+  to that source. `SELECT *` over tables, unqualified columns in joins, and
+  other templated models are reported as unresolved. Query with
+  `cartographer lineage <dataset>::<column>` or the existing MCP tools; impact
+  follows derived columns. The summary reports `column_lineage` counts.
+
 - Airflow DAG structure. Tasks are graph nodes (`task:<file>::<dag>.<task>`),
   not datasets, defined from operators and `@task` functions in `with DAG`,
   `@dag` and `dag=` DAGs. `SCHEDULES` edges record order from `>>`/`<<`, lists,
