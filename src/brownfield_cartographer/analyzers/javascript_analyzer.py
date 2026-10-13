@@ -8,7 +8,10 @@ resolved to repository files; package names and tsconfig path aliases are not.
 
 from __future__ import annotations
 
+import json
 import posixpath
+import re
+from dataclasses import dataclass
 from functools import cache
 
 import tree_sitter_javascript as tsjavascript
@@ -171,12 +174,9 @@ def analyze(module: ModuleNode, source: bytes, suffix: str) -> list[FunctionNode
     return functions
 
 
-def resolve(specifier: str, importer: str, known_paths: set[str]) -> str | None:
-    """Resolve a relative specifier to a repository file; other specifiers return None."""
-    if not specifier.startswith(("./", "../")) and specifier not in {".", ".."}:
-        return None
-    base = posixpath.normpath(posixpath.join(posixpath.dirname(importer), specifier))
-    if base.startswith("../"):
+def _file_for(base: str, known_paths: set[str]) -> str | None:
+    base = posixpath.normpath(base)
+    if base.startswith("../") or base == "..":
         return None
     stem, extension = posixpath.splitext(base)
     candidates = [base]
@@ -184,3 +184,125 @@ def resolve(specifier: str, importer: str, known_paths: set[str]) -> str | None:
     candidates += [base + ext for ext in TS_EXTENSIONS + JS_EXTENSIONS]
     candidates += [f"{base}/index{ext}" for ext in TS_EXTENSIONS + JS_EXTENSIONS]
     return next((candidate for candidate in candidates if candidate in known_paths), None)
+
+
+@dataclass(frozen=True)
+class AliasScope:
+    """Path aliases from the tsconfig/jsconfig in `directory` (repository-relative, '' for root)."""
+    directory: str
+    paths: tuple[tuple[str, tuple[str, ...]], ...] = ()
+    base_url: str | None = None
+
+
+def _jsonc(text: str) -> dict:
+    """Parse JSON with comments and trailing commas, as tsconfig files allow."""
+    out, index, in_string = [], 0, False
+    while index < len(text):
+        char = text[index]
+        if in_string:
+            out.append(char)
+            if char == "\\" and index + 1 < len(text):
+                out.append(text[index + 1])
+                index += 1
+            elif char == '"':
+                in_string = False
+        elif char == '"':
+            in_string = True
+            out.append(char)
+        elif text.startswith("//", index):
+            index = text.find("\n", index)
+            index = len(text) if index == -1 else index
+            continue
+        elif text.startswith("/*", index):
+            end = text.find("*/", index + 2)
+            index = len(text) if end == -1 else end + 2
+            continue
+        else:
+            out.append(char)
+        index += 1
+    value = json.loads(re.sub(r",(\s*[}\]])", r"\1", "".join(out)))
+    return value if isinstance(value, dict) else {}
+
+
+def load_alias_scopes(configs: dict[str, str]) -> list[AliasScope]:
+    """Build alias scopes from {relative config path: text}; `extends` is followed inside the repository."""
+    def options(path: str, seen: frozenset[str]) -> tuple[dict, dict[str, str]]:
+        """Merged compilerOptions and, for paths/baseUrl, the directory of the config that set them."""
+        if path in seen or path not in configs:
+            return {}, {}
+        try:
+            data = _jsonc(configs[path])
+        except ValueError:
+            return {}, {}
+        merged: dict = {}
+        origin: dict[str, str] = {}
+        parents = data.get("extends")
+        for parent in parents if isinstance(parents, list) else [parents]:
+            if isinstance(parent, str) and parent.startswith("."):
+                target = posixpath.normpath(posixpath.join(posixpath.dirname(path), parent))
+                target = target if target.endswith(".json") else target + ".json"
+                inherited, inherited_origin = options(target, seen | {path})
+                merged.update(inherited)
+                origin.update(inherited_origin)
+        own = data.get("compilerOptions")
+        if isinstance(own, dict):
+            for key in ("paths", "baseUrl"):
+                if key in own:
+                    merged[key] = own[key]
+                    origin[key] = posixpath.dirname(path)
+        return merged, origin
+
+    scopes = []
+    for path in sorted(configs):
+        name = posixpath.basename(path).lower()
+        if name not in {"tsconfig.json", "jsconfig.json"}:
+            continue
+        merged, origin = options(path, frozenset())
+        base_url = None
+        if isinstance(merged.get("baseUrl"), str):
+            base_url = posixpath.normpath(posixpath.join(origin["baseUrl"], merged["baseUrl"]))
+        paths = []
+        if isinstance(merged.get("paths"), dict):
+            root = base_url if base_url is not None else origin["paths"]
+            for pattern, targets in merged["paths"].items():
+                if isinstance(pattern, str) and isinstance(targets, list):
+                    paths.append((pattern, tuple(posixpath.normpath(posixpath.join(root, t))
+                                                 for t in targets if isinstance(t, str))))
+        if paths or base_url is not None:
+            directory = posixpath.dirname(path)
+            scopes.append(AliasScope("" if directory == "." else directory, tuple(paths), base_url))
+    # Nearest configuration first.
+    return sorted(scopes, key=lambda scope: len(scope.directory), reverse=True)
+
+
+def _alias_targets(specifier: str, scope: AliasScope) -> list[str]:
+    exact = [targets for pattern, targets in scope.paths if "*" not in pattern and pattern == specifier]
+    if exact:
+        return list(exact[0])
+    matches = []
+    for pattern, targets in scope.paths:
+        if pattern.count("*") == 1:
+            prefix, suffix = pattern.split("*")
+            if specifier.startswith(prefix) and specifier.endswith(suffix) and len(specifier) >= len(prefix) + len(suffix):
+                captured = specifier[len(prefix):len(specifier) - len(suffix)]
+                matches.append((len(prefix), [t.replace("*", captured) for t in targets]))
+    # TypeScript prefers the pattern with the longest prefix.
+    return max(matches, key=lambda m: m[0])[1] if matches else []
+
+
+def resolve(specifier: str, importer: str, known_paths: set[str],
+            aliases: list[AliasScope] | None = None) -> str | None:
+    """Resolve relative specifiers and tsconfig/jsconfig aliases to repository files; packages return None."""
+    if specifier.startswith(("./", "../")) or specifier in {".", ".."}:
+        return _file_for(posixpath.join(posixpath.dirname(importer), specifier), known_paths)
+    for scope in aliases or []:
+        if scope.directory and not importer.startswith(scope.directory + "/"):
+            continue
+        for target in _alias_targets(specifier, scope):
+            found = _file_for(target, known_paths)
+            if found:
+                return found
+        if scope.base_url is not None:
+            return _file_for(posixpath.join(scope.base_url, specifier), known_paths)
+        return None
+    return None

@@ -40,6 +40,12 @@ class ScanSettings:
             validate_dialect(self.sql_dialect)
 
 
+def is_js_config(name: str) -> bool:
+    """tsconfig/jsconfig files define import path aliases for JavaScript/TypeScript."""
+    lowered = name.lower()
+    return lowered.endswith(".json") and lowered.split(".", 1)[0] in {"tsconfig", "jsconfig"}
+
+
 @dataclass(frozen=True)
 class ScanDiagnostic:
     path: str
@@ -166,7 +172,7 @@ def scan_repository(root: Path, settings: ScanSettings | None = None) -> ScanRes
                         or path.name.lower() in {"credentials", "id_rsa", "id_ed25519"}):
                     diagnostic(path, "secret_filename")
                     continue
-                if path.suffix.lower() not in SOURCE_EXTENSIONS:
+                if path.suffix.lower() not in SOURCE_EXTENSIONS and not is_js_config(path.name):
                     continue
                 if len(files) >= settings.max_files:
                     diagnostic(path, "file_limit", True)

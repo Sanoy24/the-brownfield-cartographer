@@ -76,9 +76,38 @@ SQLALCHEMY_PATTERNS = [
 # ---------------------------------------------------------------------------
 
 
+def _imported_constants(syntax: ast.Module, relative_path: str,
+                        project_constants: dict[str, dict[str, str]]) -> dict[str, str]:
+    """String constants this module imports: `NAME`, `alias.NAME` and `package.module.NAME` keys."""
+    from brownfield_cartographer.agents.surveyor import _resolve_import
+    known = set(project_constants)
+    found: dict[str, str] = {}
+
+    def module_constants(dotted: str) -> dict[str, str]:
+        path = _resolve_import(dotted, known, relative_path)
+        return project_constants.get(path, {}) if path else {}
+
+    for node in syntax.body:
+        if isinstance(node, ast.ImportFrom):
+            base = "." * node.level + (node.module or "")
+            constants = module_constants(base) if base else {}
+            for alias in node.names:
+                local = alias.asname or alias.name
+                if alias.name in constants:
+                    found[local] = constants[alias.name]
+                else:
+                    joined = base + ("" if base.endswith(".") else ".") + alias.name
+                    found.update({f"{local}.{k}": v for k, v in module_constants(joined).items()})
+        elif isinstance(node, ast.Import):
+            for alias in node.names:
+                local = alias.asname or alias.name
+                found.update({f"{local}.{k}": v for k, v in module_constants(alias.name).items()})
+    return found
+
+
 def _analyze_python_data_flow(
     file_path: Path, repo_root: Path, diagnostics: list[dict] | None = None,
-    dialect: str | None = None,
+    dialect: str | None = None, project_constants: dict[str, dict[str, str]] | None = None,
 ) -> list[TransformationNode]:
     """
     Scan a Python file for data read/write operations.
@@ -112,7 +141,8 @@ def _analyze_python_data_flow(
                 yield child
             yield from calls_in_scope(child)
 
-    module_constants = embedded_sql.string_constants(syntax)
+    module_constants = {**_imported_constants(syntax, relative_path, project_constants or {}),
+                        **embedded_sql.string_constants(syntax)}
     scopes = [syntax, *(n for n in ast.walk(syntax) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)))]
     for scope in scopes:
         reads, writes, locations = [], [], []
@@ -343,9 +373,18 @@ class Hydrologist:
         logger.info("Analyzed %d SQL files", len(sql_files))
 
         py_files = [f for f in self.inventory.files if f.suffix == ".py"]
+        # Module-level SQL constants of every file, so imported query constants resolve.
+        project_constants: dict[str, dict[str, str]] = {}
         for py_file in py_files:
             try:
-                all_transformations.extend(_analyze_python_data_flow(py_file, repo_root, self.diagnostics, dialect))
+                tree = ast.parse(py_file.read_text(encoding="utf-8", errors="replace"))
+            except (SyntaxError, ValueError, OSError):
+                continue
+            project_constants[py_file.relative_to(repo_root).as_posix()] = embedded_sql.string_constants(tree)
+        for py_file in py_files:
+            try:
+                all_transformations.extend(_analyze_python_data_flow(
+                    py_file, repo_root, self.diagnostics, dialect, project_constants))
             except (ValueError, SyntaxError, OSError) as exc:
                 self.diagnostics.append({"path": py_file.relative_to(repo_root).as_posix(),
                                          "error": str(exc), "incomplete": True})

@@ -7,6 +7,27 @@ versions may contain breaking changes.
 
 ## [Unreleased]
 
+### Added
+
+- tsconfig/jsconfig path aliases for JavaScript/TypeScript imports: `paths`
+  wildcards and exact patterns, `baseUrl`, and `extends` chains within the
+  repository, using the nearest config above each importer. Config files are
+  parsed as JSON with comments and trailing commas, are part of the scanned
+  inventory, and invalidate the cache when edited.
+- SQL string constants imported from other repository modules
+  (`from etl.queries import ORDERS`, relative imports, `import etl.queries as q`
+  with `q.ORDERS`) are resolved for embedded SQL lineage. Constants assigned
+  more than once remain unresolved.
+- f-string SQL whose interpolations are only values (comparisons, `IN`,
+  `LIMIT`, quoted literals) is resolved. Interpolation in table, column, alias
+  or projection positions is still reported as dynamic SQL.
+
+### Changed
+
+- Nested Python functions are indexed with qualified names
+  (`outer.inner`, like class methods), so `@task` functions inside a `@dag`
+  function link to their code.
+
 ### Fixed
 
 - MCP tool errors reached assistants only as "Error executing tool <name>"

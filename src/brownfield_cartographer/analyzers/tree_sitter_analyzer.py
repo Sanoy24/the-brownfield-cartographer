@@ -155,6 +155,10 @@ def _extract_functions(
                         line_end=child.end_point[0] + 1,
                     )
                 )
+                # Nested functions (closures, TaskFlow tasks inside @dag) are qualified by their parent.
+                body = child.child_by_field_name("body")
+                if body:
+                    _walk(body, class_prefix=f"{qualified}.")
 
             elif child.type == "class_definition":
                 cls_name_node = child.child_by_field_name("name")

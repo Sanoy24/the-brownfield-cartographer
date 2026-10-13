@@ -115,3 +115,39 @@ def test_dead_code_candidates_use_resolved_imports(js_repo):
     assert graph.nodes["src/app.tsx"]["is_dead_code_candidate"] is True
     assert graph.nodes["src/core.ts"]["is_dead_code_candidate"] is False
     assert graph.nodes["src/util.js"]["is_dead_code_candidate"] is False
+
+
+def test_tsconfig_path_aliases_resolve_per_package(tmp_path):
+    files = {
+        "tsconfig.base.json": '{"compilerOptions": {"baseUrl": ".", "paths": {"@shared/*": ["libs/shared/*"]}}}',
+        "apps/web/tsconfig.json": (
+            '// JSONC: comments and trailing commas are allowed\n'
+            '{"extends": "../../tsconfig.base.json",\n'
+            ' "compilerOptions": {"baseUrl": ".", "paths": {"@/*": ["src/*"], "~config": ["src/config.ts"],},},}\n'
+        ),
+        "apps/web/src/app.ts": (
+            "import { log } from '@/utils/log'\n"
+            "import config from '~config'\n"
+            "import { format } from '@shared/format'\n"
+            "import react from 'react'\n"
+        ),
+        "apps/web/src/utils/log.ts": "export const log = () => 1\n",
+        "apps/web/src/config.ts": "export default {}\n",
+        "libs/shared/format.ts": "export const format = () => 1\n",
+        # No own `paths`: inherits the base aliases, resolved against the base config's baseUrl.
+        "apps/api/tsconfig.json": '{"extends": "../../tsconfig.base"}',
+        "apps/api/server.ts": "import { format } from '@shared/format'\n",
+    }
+    for path, text in files.items():
+        target = tmp_path / path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(text, encoding="utf-8")
+    Orchestrator().run(str(tmp_path))
+    edges = _edges(QueryEngine.open(tmp_path), "IMPORTS")
+    # apps/web declares its own `paths`, which replace the inherited ones (TypeScript semantics),
+    # so '@shared/format' does not resolve there; 'react' is a package.
+    assert edges == {
+        ("apps/web/src/app.ts", "apps/web/src/utils/log.ts"),
+        ("apps/web/src/app.ts", "apps/web/src/config.ts"),
+        ("apps/api/server.ts", "libs/shared/format.ts"),
+    }

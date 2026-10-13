@@ -162,3 +162,31 @@ def test_computed_dag_ids_use_the_file_name_idiom_or_are_reported():
     ids = {_short(t["id"]) for t in result["tasks"]}
     assert ids == {"dag_dbt.deps", "_.step"}
     assert any("dag_id" in d["error"] and d["line"] == 13 for d in result["diagnostics"])
+
+
+def test_taskflow_functions_inside_a_dag_function_are_linked(tmp_path):
+    (tmp_path / "dags").mkdir()
+    (tmp_path / "dags" / "reports.py").write_text(textwrap.dedent('''
+        from airflow.decorators import dag, task
+
+        @dag(dag_id="weekly")
+        def reports():
+            @task
+            def collect():
+                return [1]
+
+            @task(task_id="render_pdf")
+            def render(items):
+                return len(items)
+
+            render(collect())
+
+        reports()
+    '''), encoding="utf-8")
+    Orchestrator().run(str(tmp_path))
+    graph = QueryEngine.open(tmp_path).graph.graph
+    functions = {n for n, d in graph.nodes(data=True) if d.get("node_type") == "function"}
+    assert {"dags/reports.py::reports", "dags/reports.py::reports.collect", "dags/reports.py::reports.render"} <= functions
+    runs = {(u.split("::")[1], v) for u, v, d in graph.edges(data=True) if d.get("edge_type") == "RUNS"}
+    assert runs == {("weekly.collect", "dags/reports.py::reports.collect"),
+                    ("weekly.render_pdf", "dags/reports.py::reports.render")}

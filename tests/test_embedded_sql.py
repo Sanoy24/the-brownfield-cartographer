@@ -137,3 +137,50 @@ def test_spark_dataframe_writer_paths_are_writes(tmp_path):
     assert status == "complete"
     assert edges == {("marts.totals", "exports/totals"), ("raw/events.csv", "exports/totals"),
                      ("marts.totals", "exports/events"), ("raw/events.csv", "exports/events")}
+
+
+def test_sql_constants_imported_from_other_modules(tmp_path):
+    (tmp_path / "etl").mkdir()
+    (tmp_path / "etl" / "__init__.py").write_text("")
+    (tmp_path / "etl" / "queries.py").write_text(
+        'ORDERS = "SELECT * FROM raw.orders"\n'
+        'LOAD = "INSERT INTO marts.users SELECT * FROM raw.users"\n'
+        'CHANGING = "SELECT 1 FROM raw.a"\nCHANGING = "SELECT 1 FROM raw.b"\n')
+    (tmp_path / "etl" / "jobs.py").write_text(
+        "import pandas as pd\n"
+        "import etl.queries as q\n"
+        "from .queries import ORDERS as ORDERS_SQL, CHANGING\n\n"
+        "def export(conn, cur):\n"
+        "    pd.read_sql(ORDERS_SQL, conn).to_csv('orders.csv')\n"
+        "    cur.execute(q.LOAD)\n"
+        "    cur.execute(CHANGING)\n")
+    result = Orchestrator().run(str(tmp_path))
+    assert result["status"] == "complete", result["hydrologist"]["diagnostics"]
+    engine = QueryEngine.open(tmp_path)
+    graph = engine.graph.graph
+    edges = set()
+    for tx, attrs in graph.nodes(data=True):
+        if attrs.get("node_type") == "transformation":
+            reads = [u for u, _, d in graph.in_edges(tx, data=True) if d["edge_type"] == "CONSUMES"]
+            writes = [v for _, v, d in graph.out_edges(tx, data=True) if d["edge_type"] == "PRODUCES"]
+            edges.update((r, w) for r in reads for w in writes)
+    # CHANGING is assigned twice, so its value is not known statically.
+    assert edges == {("raw.orders", "orders.csv"), ("raw.users", "marts.users")}
+
+
+@pytest.mark.parametrize("statement,expected", [
+    ("f\"INSERT INTO m.daily SELECT * FROM s.events WHERE day = '{day}'\"", {("s.events", "m.daily")}),
+    ("f'INSERT INTO m.top SELECT * FROM s.events WHERE id = {i} AND n IN ({a}, {b}) LIMIT {n}'", {("s.events", "m.top")}),
+    ("f'INSERT INTO m.daily SELECT * FROM {table}'", set()),
+    ("f'INSERT INTO m.daily SELECT * FROM s.t JOIN {other} ON 1 = 1'", set()),
+    ("f'INSERT INTO m.daily SELECT * FROM raw_{env}.events'", set()),
+    ("f'INSERT INTO m.daily SELECT {cols} FROM s.events'", set()),
+])
+def test_f_strings_resolve_only_when_values_are_interpolated(tmp_path, statement, expected):
+    status, edges, diagnostics, _ = _analyze(tmp_path, f"""
+        def job(cur, day, i, a, b, n, table, other, env, cols):
+            cur.execute({statement})
+    """)
+    assert edges == expected
+    dynamic = [d for d in diagnostics if "Dynamic SQL" in d["error"]]
+    assert bool(dynamic) == (not expected)
