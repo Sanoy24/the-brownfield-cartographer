@@ -71,7 +71,7 @@ PyPI versions cannot be reused; fix a bad release with a new patch version.
 uv sync --frozen
 uv run pytest
 uv run ruff check src tests scripts
-uv run mypy -p brownfield_cartographer.scanner -p brownfield_cartographer.persistence -p brownfield_cartographer.query_api -p brownfield_cartographer.analyzers.javascript_analyzer --follow-imports=skip
+uv run mypy -p brownfield_cartographer.scanner -p brownfield_cartographer.persistence -p brownfield_cartographer.query_api -p brownfield_cartographer.analyzers.javascript_analyzer -p brownfield_cartographer.analyzers.embedded_sql -p brownfield_cartographer.analyzers.sql_lineage --follow-imports=skip
 uv build
 uv run --no-sync python scripts/check_wheel.py
 uv run --no-sync python scripts/check_wheel.py --mcp
