@@ -1,0 +1,118 @@
+{
+  "description": "Two Airflow DAGs: a classic DAG with module-level dag= arguments, lists, chain() with a list, a template_searchpath SQL file, inline SQL, imported python_callables and loop-generated tasks; and a TaskFlow @dag with task_id overrides and data passing. Loop-generated tasks are expected to be reported, not extracted.",
+  "status": "complete",
+  "tasks": [
+    "warehouse.start",
+    "warehouse.fetch_orders",
+    "warehouse.fetch_customers",
+    "warehouse.build_customers",
+    "warehouse.build_orders",
+    "warehouse.done",
+    "weekly_reports.collect",
+    "weekly_reports.render_pdf",
+    "weekly_reports.deliver"
+  ],
+  "schedules": [
+    [
+      "warehouse.start",
+      "warehouse.fetch_orders"
+    ],
+    [
+      "warehouse.start",
+      "warehouse.fetch_customers"
+    ],
+    [
+      "warehouse.fetch_customers",
+      "warehouse.build_customers"
+    ],
+    [
+      "warehouse.fetch_orders",
+      "warehouse.build_orders"
+    ],
+    [
+      "warehouse.build_customers",
+      "warehouse.build_orders"
+    ],
+    [
+      "warehouse.build_orders",
+      "warehouse.done"
+    ],
+    [
+      "weekly_reports.collect",
+      "weekly_reports.render_pdf"
+    ],
+    [
+      "weekly_reports.render_pdf",
+      "weekly_reports.deliver"
+    ]
+  ],
+  "runs": [
+    [
+      "warehouse.fetch_orders",
+      "pipelines/ingest.py::fetch_orders"
+    ],
+    [
+      "warehouse.fetch_customers",
+      "pipelines/ingest.py::fetch_customers"
+    ],
+    [
+      "warehouse.build_customers",
+      "dags/sql/build_customers.sql"
+    ],
+    [
+      "warehouse.build_orders",
+      "writes marts.orders"
+    ],
+    [
+      "weekly_reports.collect",
+      "dags/reports.py::collect"
+    ],
+    [
+      "weekly_reports.render_pdf",
+      "dags/reports.py::render"
+    ],
+    [
+      "weekly_reports.deliver",
+      "dags/reports.py::deliver"
+    ]
+  ],
+  "lineage": [
+    [
+      "staging.customers",
+      "marts.customers"
+    ],
+    [
+      "staging.orders",
+      "marts.orders"
+    ],
+    [
+      "marts.customers",
+      "marts.orders"
+    ]
+  ],
+  "known_gaps": {
+    "runs": [
+      {
+        "edge": [
+          "weekly_reports.collect",
+          "dags/reports.py::collect"
+        ],
+        "reason": "Functions nested inside a @dag function are not indexed as function nodes."
+      },
+      {
+        "edge": [
+          "weekly_reports.render_pdf",
+          "dags/reports.py::render"
+        ],
+        "reason": "Functions nested inside a @dag function are not indexed as function nodes."
+      },
+      {
+        "edge": [
+          "weekly_reports.deliver",
+          "dags/reports.py::deliver"
+        ],
+        "reason": "Functions nested inside a @dag function are not indexed as function nodes."
+      }
+    ]
+  }
+}
