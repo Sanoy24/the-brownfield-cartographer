@@ -80,6 +80,7 @@ SQLALCHEMY_PATTERNS = [
 
 def _analyze_python_data_flow(
     file_path: Path, repo_root: Path, diagnostics: list[dict] | None = None,
+    dialect: str | None = None,
 ) -> list[TransformationNode]:
     """
     Scan a Python file for data read/write operations.
@@ -133,7 +134,7 @@ def _analyze_python_data_flow(
                     continue
                 errors: list[dict] = []
                 try:
-                    statements = sql_statements(embedded_sql.normalize_placeholders(sql), relative_path, errors=errors)
+                    statements = sql_statements(embedded_sql.normalize_placeholders(sql), relative_path, dialect, errors)
                 except ValueError as exc:
                     errors.append({"error": str(exc)})
                     statements = []
@@ -281,6 +282,7 @@ class Hydrologist:
         all_datasets: list[DatasetNode] = []
 
         dbt_files = set()
+        dialect = self.inventory.settings.sql_dialect if self.inventory.settings else None
         manifest = self.inventory.dbt_manifest
         project_roots = sorted({f.parent for f in self.inventory.files if f.name == "dbt_project.yml"},
                                key=lambda p: p.relative_to(repo_root).as_posix())
@@ -325,7 +327,7 @@ class Hydrologist:
             relative = sql_file.relative_to(repo_root).as_posix()
             errors: list[dict] = []
             try:
-                all_transformations.extend(analyze_sql_file(sql_file, repo_root, errors=errors))
+                all_transformations.extend(analyze_sql_file(sql_file, repo_root, dialect, errors))
             except (ValueError, OSError) as exc:
                 errors.append({"error": str(exc)})
             self.diagnostics.extend({"path": relative, "incomplete": True, **error} for error in errors)
@@ -334,7 +336,7 @@ class Hydrologist:
         py_files = [f for f in self.inventory.files if f.suffix == ".py"]
         for py_file in py_files:
             try:
-                all_transformations.extend(_analyze_python_data_flow(py_file, repo_root, self.diagnostics))
+                all_transformations.extend(_analyze_python_data_flow(py_file, repo_root, self.diagnostics, dialect))
             except (ValueError, SyntaxError, OSError) as exc:
                 self.diagnostics.append({"path": py_file.relative_to(repo_root).as_posix(),
                                          "error": str(exc), "incomplete": True})

@@ -7,6 +7,27 @@ versions may contain breaking changes.
 
 ## [Unreleased]
 
+### Added
+
+- SQL dialect selection. Each SQL file or embedded SQL string is parsed with
+  the candidate dialect that yields the fewest invalid or unsupported
+  statements (DuckDB, BigQuery, Snowflake, Postgres, MySQL, Spark, T-SQL,
+  Trino). The dialect used is recorded in evidence as `sql:<dialect>`; it names
+  the grammar that parsed the SQL, not the database engine.
+  `cartographer analyze --dialect <name>` pins one dialect.
+
+### Changed
+
+- Commands without table lineage that sqlglot cannot model structurally
+  (`GRANT`, `SET`, `CREATE CATALOG`/`DATABASE`/`SCHEMA`, and similar) no longer
+  make coverage partial.
+- sqlglot's "Falling back to parsing as a 'Command'" warnings are no longer
+  printed.
+- A query in a multi-statement SQL file is a read only; it no longer creates a
+  write to a dataset named after the file. A file that is a single query still
+  defines a dataset named after the file, now labeled `confidence: inferred`
+  with method `sql:<dialect>+file_name`.
+
 ### Fixed
 
 - dbt projects in subfolders were not detected, so their models were parsed as

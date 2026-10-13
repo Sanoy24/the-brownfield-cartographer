@@ -85,6 +85,9 @@ def analyze(
     ),
     full: bool = typer.Option(False, "--full", help="Rebuild even when the snapshot is unchanged"),
     as_json: bool = typer.Option(False, "--json", help="Return structured run results on stdout"),
+    dialect: str | None = typer.Option(
+        None, "--dialect", help="SQL dialect for all SQL (e.g. bigquery, snowflake, postgres); default: best fit per file",
+    ),
     dbt_manifest: str | None = typer.Option(
         None, "--dbt-manifest", help="Repository-relative dbt v12 JSON artifact; explicitly overrides ignore rules for this file",
     ),
@@ -101,7 +104,7 @@ def analyze(
     output_dir = Path(output) if output else None
     orchestrator = None
     try:
-        orchestrator = Orchestrator(scan_settings=ScanSettings(dbt_manifest=dbt_manifest))
+        orchestrator = Orchestrator(scan_settings=ScanSettings(dbt_manifest=dbt_manifest, sql_dialect=dialect))
         if as_json:
             with redirect_stdout(sys.stderr):
                 results = orchestrator.run(repo, output_dir=output_dir, full=full)

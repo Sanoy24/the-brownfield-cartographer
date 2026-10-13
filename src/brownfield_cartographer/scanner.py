@@ -22,6 +22,7 @@ class ScanSettings:
     max_entries: int = 100_000
     max_depth: int = 128
     dbt_manifest: str | None = None
+    sql_dialect: str | None = None
 
     def __post_init__(self) -> None:
         if min(self.max_file_bytes, self.max_total_bytes, self.max_files, self.max_entries, self.max_depth) <= 0:
@@ -34,6 +35,9 @@ class ScanSettings:
                     or any(part in {".git", ".aws", ".agents", ".codex", ".cartography"}
                            or part.startswith(".env") for part in path.parts)):
                 raise ValueError("dbt manifest must be a repository-relative JSON path outside protected directories")
+        if self.sql_dialect is not None:
+            from brownfield_cartographer.analyzers.sql_lineage import validate_dialect
+            validate_dialect(self.sql_dialect)
 
 
 @dataclass(frozen=True)
@@ -52,6 +56,7 @@ class ScanResult:
     complete: bool = True
     dbt_manifest: Path | None = None
     dbt_manifest_content: str | None = field(default=None, repr=False)
+    settings: ScanSettings | None = None
 
     def report(self) -> dict:
         return {"complete": self.complete, "files": len(self.files),
@@ -76,7 +81,7 @@ def scan_repository(root: Path, settings: ScanSettings | None = None) -> ScanRes
     root = root.resolve(strict=True)
     if not root.is_dir():
         raise ValueError("Repository root must be a directory")
-    result = ScanResult(root=root)
+    result = ScanResult(root=root, settings=settings)
     files: list[Path] = []
     visited = total_bytes = 0
 
