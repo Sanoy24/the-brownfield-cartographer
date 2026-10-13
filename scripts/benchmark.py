@@ -23,7 +23,7 @@ from brownfield_cartographer.graph.knowledge_graph import KnowledgeGraph
 from brownfield_cartographer.orchestrator import Orchestrator
 
 ROOT = Path(__file__).resolve().parent.parent / "benchmarks"
-KINDS = ("imports", "functions", "lineage", "tasks", "schedules", "runs")
+KINDS = ("imports", "functions", "lineage", "columns", "tasks", "schedules", "runs")
 
 
 def _key(fact) -> str:
@@ -43,6 +43,8 @@ def extract(index: Path) -> dict[str, set[str]]:
     for source, target, data in graph.edges(data=True):
         if data.get("edge_type") == "IMPORTS":
             facts["imports"].add(_key((source, target)))
+        elif data.get("edge_type") == "DERIVES":
+            facts["columns"].add(_key((source, target)))
         elif data.get("edge_type") == "SCHEDULES":
             facts["schedules"].add(_key((_task(source), _task(target))))
         elif data.get("edge_type") == "RUNS":
