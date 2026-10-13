@@ -123,7 +123,7 @@ locations and server status controls.
 | --- | --- | --- |
 | `get_architecture` | Optional result limit | Counts, module hubs, sources/sinks, coverage |
 | `find_symbol` | Literal search pattern | Matching modules, functions and Airflow tasks with available source locations |
-| `trace_dependencies` | Qualified target, direction | Imports/calls toward dependencies or reverse dependents |
+| `trace_dependencies` | Qualified target, direction | Imports/calls toward dependencies or reverse dependents; for an Airflow task, tasks that run before or after it |
 | `analyze_impact` | Qualified target | Potential affected consumers, including Airflow tasks that run changed code and their downstream tasks; no guarantee of runtime failure |
 | `trace_data_lineage` | Dataset or `dataset::column`, upstream/downstream | Supported producers or consumers; for a column, the source or derived columns |
 | `get_code_context` | Relative path, line range | Snapshot-checked source excerpt inside the repository |
@@ -151,9 +151,15 @@ server exits with the installed version and the supported range.
 The automated test launches a real stdio server, discovers tools, reads source,
 checks structured results, makes concurrent tool calls, rejects an out-of-scope
 path, and verifies that the
-repository/index files remain unchanged. This verifies protocol integration;
-an interactive session in Claude Code, Codex, or Cursor has not been exercised
-by that test. No host settings are installed automatically.
+repository/index files remain unchanged. Rejected calls return their reason
+(for example `Target not found: ...`) so the assistant can correct the call.
+No host settings are installed automatically.
+
+A Claude Code session was also exercised directly (`claude -p` with
+`--mcp-config`/`--strict-mcp-config`, Haiku, on a public dbt and Airflow
+repository): the model discovered the tools, answered table, Airflow task and
+column lineage questions with tool calls, and matched answers computed from the
+index. Codex and Cursor sessions have not been exercised.
 
 To validate the built distribution as well as the source checkout:
 
