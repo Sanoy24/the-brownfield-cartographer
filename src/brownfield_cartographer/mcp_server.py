@@ -47,9 +47,9 @@ def create_server(repo_root: Path, index_dir: Path | None = None):
                                   idempotent_hint=True, open_world_hint=False)
     descriptions = {
         "get_architecture": "Repository counts, architectural hubs, sources/sinks and coverage for the indexed snapshot.",
-        "find_symbol": "Find indexed symbols and modules by literal text with available file/line evidence.",
+        "find_symbol": "Find indexed modules, functions and Airflow tasks by literal text with available file/line evidence.",
         "trace_dependencies": "Trace imports/calls toward dependencies or reverse dependents; unknown calls are not inferred.",
-        "analyze_impact": "Return potential affected consumers using relationship-aware traversal; this is not proof of failure.",
+        "analyze_impact": "Return potential affected consumers (code, datasets, Airflow tasks that run the code and their downstream tasks) using relationship-aware traversal; this is not proof of failure.",
         "trace_data_lineage": "Trace dataset producers or consumers using lineage relationships only.",
         "get_code_context": "Read a bounded source excerpt inside the configured repository; reject changed or unindexed files.",
     }

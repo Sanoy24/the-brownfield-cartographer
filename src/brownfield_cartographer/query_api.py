@@ -177,7 +177,7 @@ class QueryEngine:
             raise QueryError("Search text must contain 1-1000 characters")
         matches = []
         for node, attrs in sorted(self.graph.graph.nodes(data=True)):
-            if attrs.get("node_type") not in {"module", "function"}:
+            if attrs.get("node_type") not in {"module", "function", "task"}:
                 continue
             if pattern.lower() in node.lower() or any(pattern.lower() in name.lower() for name in attrs.get("classes", [])):
                 matches.append({"id": node, "type": attrs["node_type"],
