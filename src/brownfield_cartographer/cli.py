@@ -213,7 +213,10 @@ def _show_result(result: dict, as_json: bool) -> None:
         return
     console.print(f"{result['query']} | {result['status']} | snapshot {result['snapshot_id'][:12]}", markup=False)
     if result["truncated"]:
-        console.print("Results were capped; narrow the query or increase the limit.", markup=False)
+        reason = result["data"].get("stopped_by")
+        message = ("More results exist beyond this depth; increase --depth to see them." if reason == "depth"
+                   else "Results were capped; narrow the query or increase --limit.")
+        console.print(message, markup=False)
     data = result["data"]
     rows = data.get("results", data.get("matches", data.get("modules")))
     if rows is not None:

@@ -188,29 +188,36 @@ class QueryEngine:
         limit = self._limit(limit)
         if not 1 <= depth <= self.MAX_DEPTH:
             raise QueryError(f"Depth must be between 1 and {self.MAX_DEPTH}")
-        queue = deque([(start, 0)])
+        # Transformation nodes connect datasets and code; they are traversed without
+        # being reported or counted as a hop. Edge evidence already cites them.
+        queue = deque([(start, 0, start)])
         seen = {start}
         paths = []
-        truncated = False
+        stopped_by = None
         while queue:
-            current, distance = queue.popleft()
+            current, distance, origin = queue.popleft()
             candidates = sorted(neighbors(current), key=lambda pair: pair[0])
             if distance >= depth:
-                truncated |= any(n not in seen for n, _ in candidates)
+                if any(n not in seen for n, _ in candidates):
+                    stopped_by = "depth"
                 continue
             for neighbor, edge in candidates:
                 if neighbor in seen:
                     continue
                 seen.add(neighbor)
                 attrs = self.graph.graph.nodes[neighbor]
+                if attrs.get("node_type") == "transformation":
+                    queue.appendleft((neighbor, distance, origin))
+                    continue
                 paths.append({"node": neighbor, "node_type": attrs.get("node_type"), "distance": distance + 1,
-                              "via": current, "edge_type": edge.get("edge_type"), "evidence": self._evidence(neighbor, edge)})
+                              "via": origin, "edge_type": edge.get("edge_type"), "evidence": self._evidence(neighbor, edge)})
                 if len(paths) >= limit or len(seen) >= self.MAX_VISITED:
                     # Conservative marker: reaching a bound may leave unexplored edges.
-                    truncated = True
-                    return self._response(query, {"target": start, "results": paths}, truncated=truncated)
-                queue.append((neighbor, distance + 1))
-        return self._response(query, {"target": start, "results": paths}, truncated=truncated)
+                    return self._response(query, {"target": start, "results": paths, "stopped_by": "limit"},
+                                          truncated=True)
+                queue.append((neighbor, distance + 1, neighbor))
+        return self._response(query, {"target": start, "results": paths, "stopped_by": stopped_by},
+                              truncated=stopped_by is not None)
 
     def trace_dependencies(self, target: str, direction: Literal["dependencies", "dependents"] = "dependencies",
                            depth: int = 5, limit: int = 100) -> dict[str, Any]:

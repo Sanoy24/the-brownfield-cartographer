@@ -30,6 +30,11 @@ versions may contain breaking changes.
 
 ### Changed
 
+- Lineage and impact results no longer list internal transformation nodes
+  (`tx:...`). They are followed transparently and do not count toward
+  `depth`, so `--depth 1` returns the directly connected datasets; evidence
+  still cites the transformation's file and lines. Results report
+  `stopped_by: depth|limit` when more results exist, and the CLI says which.
 - Commands without table lineage that sqlglot cannot model structurally
   (`GRANT`, `SET`, `CREATE CATALOG`/`DATABASE`/`SCHEMA`, and similar) no longer
   make coverage partial.
