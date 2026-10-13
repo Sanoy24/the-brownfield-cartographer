@@ -65,15 +65,15 @@
     ],
     [
       "weekly_reports.collect",
-      "dags/reports.py::collect"
+      "dags/reports.py::reports.collect"
     ],
     [
       "weekly_reports.render_pdf",
-      "dags/reports.py::render"
+      "dags/reports.py::reports.render"
     ],
     [
       "weekly_reports.deliver",
-      "dags/reports.py::deliver"
+      "dags/reports.py::reports.deliver"
     ]
   ],
   "lineage": [
@@ -89,30 +89,5 @@
       "marts.customers",
       "marts.orders"
     ]
-  ],
-  "known_gaps": {
-    "runs": [
-      {
-        "edge": [
-          "weekly_reports.collect",
-          "dags/reports.py::collect"
-        ],
-        "reason": "Functions nested inside a @dag function are not indexed as function nodes."
-      },
-      {
-        "edge": [
-          "weekly_reports.render_pdf",
-          "dags/reports.py::render"
-        ],
-        "reason": "Functions nested inside a @dag function are not indexed as function nodes."
-      },
-      {
-        "edge": [
-          "weekly_reports.deliver",
-          "dags/reports.py::deliver"
-        ],
-        "reason": "Functions nested inside a @dag function are not indexed as function nodes."
-      }
-    ]
-  }
+  ]
 }

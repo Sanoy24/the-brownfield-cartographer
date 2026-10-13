@@ -78,6 +78,8 @@ class _DagVisitor:
         self.transformations: list[tuple[str, TransformationNode]] = []
         self.diagnostics: list[dict] = []
         self.search_paths: list[str] = []
+        # Qualified-name prefix of the enclosing @dag function, matching indexed nested functions.
+        self.prefix = ""
         self.functions = {n.name for n in tree.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))}
         self.imports = self._imports(tree)
         dags = [n for n in ast.walk(tree) if isinstance(n, ast.Call) and _name(n) == "DAG"]
@@ -342,7 +344,9 @@ class _DagVisitor:
                       (d.value.id if isinstance(d, ast.Attribute) and isinstance(d.value, ast.Name) else _name(d))
                       for d in function.decorator_list]
         if "dag" in decorators:
+            outer, self.prefix = self.prefix, f"{self.prefix}{function.name}."
             self.visit(function.body, self._decorated_dag_id(function), in_loop)
+            self.prefix = outer
             return
         if "task" not in decorators:
             return
@@ -353,7 +357,7 @@ class _DagVisitor:
             return
         task = self._task_node(dag_id, given or function.name, "@task", function)
         self.taskflow[function.name] = task
-        self.runs[(task, f"{self.path}::{function.name}")] = _span(function)
+        self.runs[(task, f"{self.path}::{self.prefix}{function.name}")] = _span(function)
 
 
 def parse_airflow(source: str, relative_path: str, known_paths: set[str], dialect: str | None = None) -> dict | None:

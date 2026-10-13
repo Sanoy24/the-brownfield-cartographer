@@ -22,6 +22,12 @@ versions may contain breaking changes.
   `LIMIT`, quoted literals) is resolved. Interpolation in table, column, alias
   or projection positions is still reported as dynamic SQL.
 
+### Changed
+
+- Nested Python functions are indexed with qualified names
+  (`outer.inner`, like class methods), so `@task` functions inside a `@dag`
+  function link to their code.
+
 ### Fixed
 
 - MCP tool errors reached assistants only as "Error executing tool <name>"
