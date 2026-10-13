@@ -64,3 +64,27 @@ def test_unusable_mcp_sdk_is_reported(monkeypatch, tmp_path, installed, expected
     monkeypatch.setattr(mcp_server, "_installed_mcp_version", lambda: installed)
     with pytest.raises(RuntimeError, match=expected):
         mcp_server.create_server(tmp_path)
+
+
+def test_server_starts_before_analysis_and_picks_up_the_index(tmp_path):
+    from mcp import ClientSession, StdioServerParameters
+    from mcp.client.stdio import stdio_client
+    if importlib.util.find_spec("mcp") is None:
+        pytest.skip("Optional mcp extra is not installed")
+    (tmp_path / "source.py").write_text("def run():\n    return 1\n")
+
+    async def check():
+        parameters = StdioServerParameters(command=sys.executable,
+            args=["-m", "brownfield_cartographer.mcp_server", "--repo", str(tmp_path)],
+            env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"})
+        async with stdio_client(parameters) as (reader, writer):
+            async with ClientSession(reader, writer) as session:
+                await session.initialize()
+                assert len((await session.list_tools()).tools) == 6
+                before = await session.call_tool("find_symbol", {"pattern": "run"})
+                assert before.is_error and "cartographer analyze" in before.content[0].text
+                Orchestrator().run(str(tmp_path))
+                after = await session.call_tool("find_symbol", {"pattern": "run"})
+                assert not after.is_error
+                assert after.structured_content["data"]["matches"][0]["id"] == "source.py::run"
+    asyncio.run(asyncio.wait_for(check(), timeout=60))
