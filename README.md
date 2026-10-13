@@ -105,6 +105,22 @@ markers, and available source evidence. Ambiguous targets are rejected.
 
 ## Connect your AI assistant
 
+**Claude Code plugin** (needs [uv](https://docs.astral.sh/uv/); nothing else to
+install or configure):
+
+```text
+/plugin marketplace add Sanoy24/the-brownfield-cartographer
+/plugin install brownfield-cartographer@brownfield-cartographer
+```
+
+The plugin starts the MCP server for the current project and adds a
+`data-impact` skill. Ask questions such as "what breaks if I change
+`stg_orders`?". If the project has not been analyzed yet, the tools say so and
+the assistant runs `cartographer analyze` (offline; repository code is never
+executed) before answering.
+
+**Any MCP host:**
+
 ```sh
 cartographer analyze /absolute/path/to/repository
 cartographer-mcp --repo /absolute/path/to/repository

@@ -38,8 +38,18 @@ changed ignore rules. Queries otherwise describe their indexed snapshot.
 
 ## Claude Code
 
-From your target project, register the server using your absolute interpreter
-and repository paths:
+The simplest setup is the plugin, which bundles the server (run through `uvx`
+for the current project) and a skill describing when to use each tool:
+
+```text
+/plugin marketplace add Sanoy24/the-brownfield-cartographer
+/plugin install brownfield-cartographer@brownfield-cartographer
+```
+
+The server starts even before the project is analyzed; tools then return the
+exact `cartographer analyze` command to run, and pick up the index once it
+exists. To register the server manually instead, use your absolute interpreter
+and repository paths from your target project:
 
 ```sh
 claude mcp add --transport stdio --scope project brownfield -- /absolute/path/to/cartographer/.venv/bin/python -m brownfield_cartographer.mcp_server --repo /absolute/path/to/target
