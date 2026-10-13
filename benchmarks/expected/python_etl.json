@@ -34,16 +34,5 @@
       "staging.events",
       "marts.daily"
     ]
-  ],
-  "known_gaps": {
-    "lineage": [
-      {
-        "edge": [
-          "staging.events",
-          "marts.daily"
-        ],
-        "reason": "f-string SQL is reported as dynamic, even when only values are interpolated."
-      }
-    ]
-  }
+  ]
 }

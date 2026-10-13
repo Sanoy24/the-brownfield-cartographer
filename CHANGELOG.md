@@ -18,6 +18,9 @@ versions may contain breaking changes.
   (`from etl.queries import ORDERS`, relative imports, `import etl.queries as q`
   with `q.ORDERS`) are resolved for embedded SQL lineage. Constants assigned
   more than once remain unresolved.
+- f-string SQL whose interpolations are only values (comparisons, `IN`,
+  `LIMIT`, quoted literals) is resolved. Interpolation in table, column, alias
+  or projection positions is still reported as dynamic SQL.
 
 ### Fixed
 

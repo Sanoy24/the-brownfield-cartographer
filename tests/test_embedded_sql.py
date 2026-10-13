@@ -166,3 +166,21 @@ def test_sql_constants_imported_from_other_modules(tmp_path):
             edges.update((r, w) for r in reads for w in writes)
     # CHANGING is assigned twice, so its value is not known statically.
     assert edges == {("raw.orders", "orders.csv"), ("raw.users", "marts.users")}
+
+
+@pytest.mark.parametrize("statement,expected", [
+    ("f\"INSERT INTO m.daily SELECT * FROM s.events WHERE day = '{day}'\"", {("s.events", "m.daily")}),
+    ("f'INSERT INTO m.top SELECT * FROM s.events WHERE id = {i} AND n IN ({a}, {b}) LIMIT {n}'", {("s.events", "m.top")}),
+    ("f'INSERT INTO m.daily SELECT * FROM {table}'", set()),
+    ("f'INSERT INTO m.daily SELECT * FROM s.t JOIN {other} ON 1 = 1'", set()),
+    ("f'INSERT INTO m.daily SELECT * FROM raw_{env}.events'", set()),
+    ("f'INSERT INTO m.daily SELECT {cols} FROM s.events'", set()),
+])
+def test_f_strings_resolve_only_when_values_are_interpolated(tmp_path, statement, expected):
+    status, edges, diagnostics, _ = _analyze(tmp_path, f"""
+        def job(cur, day, i, a, b, n, table, other, env, cols):
+            cur.execute({statement})
+    """)
+    assert edges == expected
+    dynamic = [d for d in diagnostics if "Dynamic SQL" in d["error"]]
+    assert bool(dynamic) == (not expected)

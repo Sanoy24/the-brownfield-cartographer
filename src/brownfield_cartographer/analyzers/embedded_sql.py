@@ -14,6 +14,9 @@ import ast
 import re
 from collections import Counter
 
+import sqlglot
+from sqlglot import exp
+
 SQL_METHODS = {"execute", "executemany", "executescript", "sql", "read_sql", "read_sql_query"}
 TABLE_READ_METHODS = {"read_sql_table"}
 _SQL_ARGUMENTS = {"sql", "query", "statement", "operation", "sql_script", "sqlQuery"}
@@ -80,6 +83,29 @@ def _leading_constant(node: ast.AST) -> str | None:
     return None
 
 
+def _in_value_position(placeholder: exp.Placeholder) -> bool:
+    parent = placeholder.parent
+    if isinstance(parent, (exp.Table, exp.Column, exp.Identifier, exp.TableAlias, exp.Schema)):
+        return False
+    return not (isinstance(parent, exp.Select) and placeholder in parent.expressions)
+
+
+def _values_only(node: ast.JoinedStr) -> str | None:
+    """SQL for an f-string whose interpolations are all values (comparisons, IN, LIMIT, inside quotes)."""
+    text = "".join(str(v.value) if isinstance(v, ast.Constant) else "?" for v in node.values)
+    if not looks_like_sql(text):
+        return None
+    from brownfield_cartographer.analyzers.sql_lineage import CANDIDATE_DIALECTS
+    for dialect in CANDIDATE_DIALECTS:
+        try:
+            statements = [s for s in sqlglot.parse(normalize_placeholders(text), dialect=dialect) if s is not None]
+        except sqlglot.errors.SqlglotError:
+            continue
+        placeholders = [p for statement in statements for p in statement.find_all(exp.Placeholder)]
+        return text if all(_in_value_position(p) for p in placeholders) else None
+    return None
+
+
 def resolve_sql(node: ast.AST, constants: dict[str, str]) -> tuple[str | None, bool]:
     """Return (sql_text, dynamic). Non-SQL or unknown values return (None, False)."""
     node = _unwrap_text(node)
@@ -94,6 +120,9 @@ def resolve_sql(node: ast.AST, constants: dict[str, str]) -> tuple[str | None, b
         if len(parts) == len(node.values):
             value = "".join(str(part) for part in parts)
             return (value, False) if looks_like_sql(value) else (None, False)
+        values_only = _values_only(node)
+        if values_only is not None:
+            return values_only, False
     prefix = _leading_constant(node)
     if prefix is not None and looks_like_sql(prefix):
         return None, True
