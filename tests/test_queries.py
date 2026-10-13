@@ -174,3 +174,24 @@ def test_ambiguous_symbol_is_not_silently_selected(indexed_repo):
     Orchestrator().run(str(indexed_repo))
     with pytest.raises(QueryError, match="Ambiguous"):
         QueryEngine.open(indexed_repo).analyze_impact("common.py")
+
+
+def test_lineage_and_impact_hide_transformation_plumbing(tmp_path):
+    (tmp_path / "stage.sql").write_text("CREATE TABLE s.orders AS SELECT * FROM raw.orders;\n")
+    (tmp_path / "mart.sql").write_text("CREATE TABLE m.daily AS SELECT * FROM s.orders;\n")
+    assert Orchestrator().run(str(tmp_path))["status"] == "complete"
+    engine = QueryEngine.open(tmp_path)
+
+    direct = engine.trace_data_lineage("m.daily", depth=1)["data"]["results"]
+    assert [(r["node"], r["node_type"], r["distance"]) for r in direct] == [("s.orders", "dataset", 1)]
+    assert direct[0]["evidence"]["path"] == "mart.sql"
+    assert direct[0]["evidence"]["line_range"] == [1, 1]
+    assert engine.trace_data_lineage("m.daily", depth=1)["data"]["stopped_by"] == "depth"
+    assert engine.trace_data_lineage("m.daily")["data"]["stopped_by"] is None
+
+    full = engine.trace_data_lineage("m.daily")["data"]["results"]
+    assert [(r["node"], r["distance"]) for r in full] == [("s.orders", 1), ("raw.orders", 2)]
+
+    impact = engine.analyze_impact("stage.sql")["data"]["results"]
+    assert not any(r["node"].startswith("tx:") for r in impact)
+    assert [(r["node"], r["distance"]) for r in impact] == [("s.orders", 1), ("m.daily", 2)]
