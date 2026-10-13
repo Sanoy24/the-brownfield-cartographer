@@ -47,6 +47,14 @@ configuration, model SQL and schema YAML. It supports basic `ref`/`source`
 patterns and is less complete than dbt's own parsed artifact. Selecting a
 manifest does not enable model calls or uploads.
 
+With a manifest, column lineage comes from each model's `compiled_code`, where
+refs and macros are already expanded. Run `dbt compile` (not only `dbt parse`)
+before analysis so the manifest contains compiled SQL; models without it are
+counted in a diagnostic. Tables in compiled SQL are mapped back to dbt unique IDs
+through `relation_name`, so column nodes look like
+`model.shop.orders::order_id`. The manifest's `adapter_type` selects the SQL
+dialect. Cartographer never runs dbt itself.
+
 Every `dbt_project.yml` in the repository is treated as a project root, so
 projects in subfolders (for example `analytics/dbt/`) and several projects in
 one repository are supported. The analysis summary lists them as

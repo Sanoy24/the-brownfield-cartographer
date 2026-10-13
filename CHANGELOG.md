@@ -7,6 +7,14 @@ versions may contain breaking changes.
 
 ## [Unreleased]
 
+### Added
+
+- Column lineage from a dbt manifest's compiled SQL. With `--dbt-manifest`,
+  each model's `compiled_code` (macros and refs already expanded) is traced;
+  tables are mapped back to dbt unique IDs through `relation_name`, and the
+  manifest's `adapter_type` selects the SQL dialect. Models without compiled
+  SQL are counted in a diagnostic suggesting `dbt compile`.
+
 ## [0.6.0] - 2026-10-13
 
 Adds column-level lineage, Airflow task modeling and per-file SQL dialect
