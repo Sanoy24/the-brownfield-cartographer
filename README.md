@@ -4,13 +4,27 @@
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 ![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue.svg)
 
-A local-first repository analysis engine for evidence-backed code structure,
-dependency impact, and data lineage. The Python API, deterministic CLI, and
-read-only local MCP server share one query engine; reasoning belongs to the
-developer's existing AI assistant.
+**What breaks if I change this?** Cartographer finds the dependencies your
+language server can't see: a table written by a Python job, transformed in SQL,
+consumed by a dbt model. It maps them statically and locally, with file and line
+evidence, for you and your coding agent.
 
-The CLI includes `analyze`, `overview`, `find`, `impact`, and `lineage`.
-The support table below describes current capabilities and limitations.
+```sh
+cartographer analyze .
+cartographer impact models/staging/stg_orders.sql   # what is downstream of this file?
+cartographer lineage customers --direction upstream # where does this table come from?
+```
+
+Language servers and grep answer questions about code symbols. Cartographer
+answers questions that cross language boundaries through names in strings and
+configuration, starting with data lineage across Python, SQL and dbt. Every
+result carries source evidence and coverage, and unsupported cases are reported
+rather than guessed. It runs offline, needs no API key, and never executes
+repository code.
+
+One query engine serves the CLI, a Python API, and a read-only MCP server for
+Claude Code, Codex and Cursor. The support table below lists current
+capabilities and known gaps.
 
 ## Install and analyze
 
@@ -42,10 +56,7 @@ An explicit GitHub URL input still downloads a checkout:
 cartographer analyze https://github.com/owner/repository
 ```
 
-Local analysis never implicitly uploads source. Environment API keys do not
-enable models in the CLI. Legacy model-dependent capabilities remain available
-as optional Python code through `uv sync --extra llm`; they are outside the
-deterministic default workflow.
+Local analysis never uploads source and never calls a model.
 
 ## Outputs and queries
 
@@ -66,15 +77,13 @@ directory by default and an `owner--repository` folder name.
 | `lineage_graph.json` | Dataset/transformation graph view |
 | `analysis_summary.json` | Complete/partial status, diagnostics and stage results |
 | `CODEBASE.md` | Static repository context |
-| `onboarding_brief.md` | Static metrics; inferred answers are omitted by default |
+| `onboarding_brief.md` | Key modules, data entry/exit points and change hotspots |
 | `cartography_trace.jsonl` | Retained run history with run IDs |
 | `state.json` | Last successful snapshot's content fingerprint |
 
-Start the existing deterministic interactive query interface:
-
-```sh
-uv run cartographer query /path/to/repository
-```
+Explore interactively with `cartographer query /path/to/repository`. It accepts
+`find`, `impact`, `deps`, `dependents`, `lineage`, `lineage-down`, `context`,
+`overview`, `help` and `quit`, using the same engine as the commands below.
 
 Or use individual commands with human-readable or JSON output:
 
@@ -102,11 +111,9 @@ The stdio server exposes `get_architecture`, `find_symbol`, `trace_dependencies`
 previously analyzed index inside a fixed repository scope and never calls a
 model. See [MCP setup](docs/MCP.md) for Claude Code, Codex, and Cursor.
 
-Commands: `find <text>`, `lineage <dataset>`, `lineage-down <dataset>`,
-`blast <module-or-dataset>`, `explain <module>`, `summary`, and `quit`.
-`find` is lexical matching. `blast` reports potential dependents, not a guarantee
-that every consumer will break. Read the persisted coverage and diagnostics
-before relying on results from an incomplete scan.
+`find` is lexical matching. `impact` reports potential dependents, not a
+guarantee that every consumer will break. Read the persisted coverage and
+diagnostics before relying on results from an incomplete scan.
 
 Analysis returns exit code 0 for complete/unchanged snapshots, 2 for partial
 coverage, and 1 for an input or fatal run error. A partial run does not advance
