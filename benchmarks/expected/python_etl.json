@@ -39,20 +39,6 @@
     "lineage": [
       {
         "edge": [
-          "raw.users",
-          "staging/active_users.parquet"
-        ],
-        "reason": "SQL constants imported from another module are not resolved."
-      },
-      {
-        "edge": [
-          "raw.subscriptions",
-          "staging/active_users.parquet"
-        ],
-        "reason": "SQL constants imported from another module are not resolved."
-      },
-      {
-        "edge": [
           "staging.events",
           "marts.daily"
         ],

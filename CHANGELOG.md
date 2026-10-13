@@ -14,6 +14,10 @@ versions may contain breaking changes.
   repository, using the nearest config above each importer. Config files are
   parsed as JSON with comments and trailing commas, are part of the scanned
   inventory, and invalidate the cache when edited.
+- SQL string constants imported from other repository modules
+  (`from etl.queries import ORDERS`, relative imports, `import etl.queries as q`
+  with `q.ORDERS`) are resolved for embedded SQL lineage. Constants assigned
+  more than once remain unresolved.
 
 ### Fixed
 

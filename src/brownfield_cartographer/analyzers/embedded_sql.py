@@ -85,8 +85,9 @@ def resolve_sql(node: ast.AST, constants: dict[str, str]) -> tuple[str | None, b
     node = _unwrap_text(node)
     if isinstance(node, ast.Constant) and isinstance(node.value, str):
         return (node.value, False) if looks_like_sql(node.value) else (None, False)
-    if isinstance(node, ast.Name) and node.id in constants:
-        value = constants[node.id]
+    key = node.id if isinstance(node, ast.Name) else ast.unparse(node) if isinstance(node, ast.Attribute) else None
+    if key is not None and key in constants:
+        value = constants[key]
         return (value, False) if looks_like_sql(value) else (None, False)
     if isinstance(node, ast.JoinedStr):
         parts = [v.value for v in node.values if isinstance(v, ast.Constant)]
