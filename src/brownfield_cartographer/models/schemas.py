@@ -170,6 +170,11 @@ class TransformationNode(BaseModel):
     confidence: str | None = Field(default=None)
     artifact_file: str | None = Field(default=None)
     resource_id: str | None = Field(default=None)
+    column_lineage: list[dict] = Field(
+        default_factory=list,
+        description="Per written column: {target, sources: ['dataset::column'], kind: copy|derived}",
+    )
+    unresolved_columns: list[str] = Field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------

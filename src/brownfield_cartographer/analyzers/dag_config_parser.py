@@ -27,6 +27,19 @@ from brownfield_cartographer.models.schemas import (
 logger = logging.getLogger(__name__)
 
 # Regex to match dbt ref('model_name') and source('schema', 'table') calls
+_JINJA_COMMENT = re.compile(r"\{#.*?#\}", re.DOTALL)
+_JINJA_CONFIG = re.compile(r"\{\{\s*config\(.*?\)\s*\}\}", re.DOTALL)
+_REF_RENDER = re.compile(r"""\{\{\s*ref\(\s*(?:['"]\w+['"]\s*,\s*)?['"](\w+)['"]\s*\)\s*\}\}""")
+_SOURCE_RENDER = re.compile(r"""\{\{\s*source\(\s*['"](\w+)['"]\s*,\s*['"](\w+)['"]\s*\)\s*\}\}""")
+
+
+def render_simple_model(sql_text: str) -> str | None:
+    """Render a model whose only Jinja is comments, config(), ref() and source(); otherwise None."""
+    text = _JINJA_CONFIG.sub("", _JINJA_COMMENT.sub("", sql_text))
+    text = _SOURCE_RENDER.sub(r"\1.\2", _REF_RENDER.sub(r"\1", text))
+    return None if "{{" in text or "{%" in text else text.strip().rstrip(";")
+
+
 REF_PATTERN = re.compile(r"""\{\{\s*ref\(\s*['"](\w+)['"]\s*\)\s*\}\}""")
 SOURCE_PATTERN = re.compile(
     r"""\{\{\s*source\(\s*['"](\w+)['"]\s*,\s*['"](\w+)['"]\s*\)\s*\}\}"""
@@ -59,6 +72,7 @@ def parse_dbt_project(project_root: Path, source_files: tuple[Path, ...] | None 
     transformations: list[TransformationNode] = []
     datasets: list[DatasetNode] = []
     config_edges: list[ConfiguresEdge] = []
+    column_skipped = 0
     if source_files is None:
         from brownfield_cartographer.scanner import scan_repository
         source_files = scan_repository(project_root).files
@@ -95,6 +109,20 @@ def parse_dbt_project(project_root: Path, source_files: tuple[Path, ...] | None 
             for schema_name, table_name in source_deps:
                 source_datasets.append(f"{schema_name}.{table_name}")
 
+            # Column lineage from the rendered model; models with other Jinja are skipped.
+            columns, unresolved = [], []
+            rendered = render_simple_model(sql_text)
+            if rendered is None:
+                column_skipped += 1
+            else:
+                from brownfield_cartographer.analyzers.sql_lineage import sql_statements
+                errors: list[dict] = []
+                statements = sql_statements(f"CREATE TABLE {model_name} AS {rendered}", relative_path, None, errors)
+                if errors or len(statements) != 1:
+                    column_skipped += 1
+                else:
+                    columns, unresolved = statements[0]["columns"], statements[0]["unresolved_columns"]
+
             transformations.append(
                 TransformationNode(
                     source_datasets=source_datasets,
@@ -103,6 +131,7 @@ def parse_dbt_project(project_root: Path, source_files: tuple[Path, ...] | None 
                     source_file=relative_path,
                     line_range=(1, len(sql_text.split("\n"))),
                     sql_query_if_applicable=sql_text[:500],
+                    column_lineage=columns, unresolved_columns=unresolved,
                 )
             )
 
@@ -163,4 +192,5 @@ def parse_dbt_project(project_root: Path, source_files: tuple[Path, ...] | None 
         "transformations": transformations,
         "datasets": datasets,
         "config_edges": config_edges,
+        "column_skipped": column_skipped,
     }

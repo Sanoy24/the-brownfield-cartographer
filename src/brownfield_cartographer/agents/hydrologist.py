@@ -147,7 +147,8 @@ def _analyze_python_data_flow(
                             source_file=relative_path, source_datasets=statement["sources"],
                             target_datasets=[statement["target"]], transformation_type=TransformationType.SQL_QUERY,
                             line_range=span, sql_query_if_applicable=statement["text"][:500],
-                            analysis_method="embedded_sql", confidence="syntax"))
+                            analysis_method="embedded_sql", confidence="syntax",
+                            column_lineage=statement["columns"], unresolved_columns=statement["unresolved_columns"]))
                     else:
                         writes.append(statement["target"])
                         locations.append(span)
@@ -265,6 +266,12 @@ class Hydrologist:
             "dbt_mode": self.dbt_mode,
             "dbt_projects": self.dbt_projects,
             "airflow_tasks": task_count,
+            "column_lineage": {
+                "derivations": sum(1 for *_, d in knowledge_graph.graph.edges(data=True)
+                                   if d.get("edge_type") == "DERIVES"),
+                "unresolved": sum(len(t.unresolved_columns) for t in all_transformations),
+                "skipped_templates": self.dbt_column_skipped,
+            },
         }
         logger.info(
             "Hydrologist complete: %d transformations, %d sources, %d sinks",
@@ -282,6 +289,7 @@ class Hydrologist:
         all_datasets: list[DatasetNode] = []
 
         dbt_files = set()
+        self.dbt_column_skipped = 0
         dialect = self.inventory.settings.sql_dialect if self.inventory.settings else None
         manifest = self.inventory.dbt_manifest
         project_roots = sorted({f.parent for f in self.inventory.files if f.name == "dbt_project.yml"},
@@ -315,6 +323,7 @@ class Hydrologist:
                     continue
                 all_transformations.extend(dbt_results["transformations"])
                 all_datasets.extend(dbt_results["datasets"])
+                self.dbt_column_skipped += dbt_results["column_skipped"]
                 dbt_files.update(tx.source_file for tx in dbt_results["transformations"])
                 for edge in dbt_results["config_edges"]:
                     knowledge_graph.add_configures_edge(edge.source, edge.target)

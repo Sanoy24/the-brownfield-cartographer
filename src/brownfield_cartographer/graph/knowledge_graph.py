@@ -106,7 +106,23 @@ class KnowledgeGraph:
             if tgt_dataset not in self.graph:
                 self.add_dataset_node(DatasetNode(name=tgt_dataset))
             self.graph.add_edge(tx_id, tgt_dataset, edge_type="PRODUCES", **evidence)
+
+        # Column lineage: source column -> written column, with the statement's evidence.
+        if len(transformation.target_datasets) == 1:
+            for entry in transformation.column_lineage:
+                target = self._column_node(transformation.target_datasets[0], entry["target"])
+                for source in entry["sources"]:
+                    dataset, _, column = source.rpartition("::")
+                    self.graph.add_edge(self._column_node(dataset, column), target, edge_type="DERIVES",
+                                        kind=entry["kind"], **evidence)
         return tx_id
+
+    def _column_node(self, dataset: str, column: str) -> str:
+        node = f"{dataset}::{column}"
+        self._require_node_type(node, "column")
+        if node not in self.graph:
+            self.graph.add_node(node, node_type="column", dataset=dataset, column=column)
+        return node
 
     def add_task_node(self, task: dict, source_file: str) -> None:
         """Register an orchestration task (not a dataset) defined in source_file."""
@@ -168,22 +184,24 @@ class KnowledgeGraph:
                 yield neighbor, edge
         for neighbor in self.graph.successors(node):
             edge = self.graph.edges[node, neighbor]
-            if edge.get("edge_type") in {"CONSUMES", "PRODUCES", "DEFINES", "CONFIGURES", "SCHEDULES"}:
+            if edge.get("edge_type") in {"CONSUMES", "PRODUCES", "DEFINES", "CONFIGURES", "SCHEDULES", "DERIVES"}:
                 yield neighbor, edge
 
     def lineage_neighbors(self, node: str, direction: str):
         if direction not in {"upstream", "downstream"}:
             raise ValueError("Direction must be upstream or downstream")
+        # Columns follow column derivations; datasets follow dataset lineage.
+        kinds = {"DERIVES"} if self.graph.nodes[node].get("node_type") == "column" else {"CONSUMES", "PRODUCES"}
         neighbors = self.graph.predecessors(node) if direction == "upstream" else self.graph.successors(node)
         for neighbor in neighbors:
             edge = self.graph.edges[neighbor, node] if direction == "upstream" else self.graph.edges[node, neighbor]
-            if edge.get("edge_type") in {"CONSUMES", "PRODUCES"}:
+            if edge.get("edge_type") in kinds:
                 yield neighbor
 
     def clear_lineage(self) -> None:
         """Remove observations owned by lineage extractors before a safe rebuild."""
         nodes = [n for n, d in self.graph.nodes(data=True)
-                 if d.get("node_type") in {"dataset", "transformation", "config", "task"}]
+                 if d.get("node_type") in {"dataset", "transformation", "config", "task", "column"}]
         self.graph.remove_nodes_from(nodes)
         self._dataset_nodes.clear()
         self._transformation_nodes.clear()
@@ -507,6 +525,7 @@ class KnowledgeGraph:
             "functions": len(self._function_nodes),
             "transformations": transformation_count,
             "tasks": sum(1 for _, d in self.graph.nodes(data=True) if d.get("node_type") == "task"),
+            "columns": sum(1 for _, d in self.graph.nodes(data=True) if d.get("node_type") == "column"),
             "circular_dependencies": len(self.find_circular_dependencies(self.get_module_subgraph())),
         }
 
