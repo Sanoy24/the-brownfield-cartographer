@@ -7,6 +7,17 @@ versions may contain breaking changes.
 
 ## [Unreleased]
 
+### Fixed
+
+- MCP tool errors reached assistants only as "Error executing tool <name>"
+  since the SDK 2.x migration; the reason (for example `Target not found` or an
+  ambiguous-target hint) is returned again so the assistant can correct the call.
+- `trace_dependencies` accepts Airflow task ids and follows task order
+  (`dependencies` run before the task, `dependents` after). A live Claude Code
+  session previously fell back to reading DAG code and missed a downstream task.
+- MCP tool descriptions mention Airflow task ids and `dataset::column` lineage,
+  which a live session did not discover before.
+
 ### Added
 
 - Column lineage from a dbt manifest's compiled SQL. With `--dbt-manifest`,
