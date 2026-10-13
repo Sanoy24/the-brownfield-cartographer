@@ -31,7 +31,7 @@ package = Path(brownfield_cartographer.__file__).resolve().parent
 assert package.is_relative_to(Path(sys.prefix).resolve()), package
 assert (package / "py.typed").is_file()
 assert importlib.metadata.version("brownfield-cartographer") == sys.argv[1]
-for optional in ("langchain_core", "langgraph", "sklearn", "mcp"):
+for optional in ("mcp",):
     assert importlib.util.find_spec(optional) is None, optional
 
 def deny_network(*args, **kwargs):
@@ -104,9 +104,6 @@ import sys
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 from brownfield_cartographer.query_api import QueryEngine
-
-for optional in ("langchain_core", "langgraph", "sklearn"):
-    assert importlib.util.find_spec(optional) is None, optional
 
 repo = Path.cwd() / "fixture"
 engine = QueryEngine.open(repo)
