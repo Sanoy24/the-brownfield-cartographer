@@ -321,3 +321,12 @@ def test_pipeline_worktree_full_equivalence(tmp_path, operation):
     fresh.run(str(repo), output_dir=tmp_path / "fresh", full=True)
     assert dict(updated.knowledge_graph.graph.nodes(data=True)) == dict(fresh.knowledge_graph.graph.nodes(data=True))
     assert list(updated.knowledge_graph.graph.edges(data=True)) == list(fresh.knowledge_graph.graph.edges(data=True))
+
+
+def test_sql_file_keeps_statements_around_an_unsupported_one(tmp_path):
+    (tmp_path / "job.sql").write_text(
+        "CREATE TABLE a.x AS SELECT * FROM b.y;\nUPDATE a.x SET n = 1;\nINSERT INTO a.z SELECT * FROM a.x;\n")
+    from brownfield_cartographer.orchestrator import Orchestrator
+    assert Orchestrator().run(str(tmp_path))["status"] == "partial"
+    lineage = QueryEngine.open(tmp_path).trace_data_lineage("a.z")["data"]["results"]
+    assert {row["node"] for row in lineage if row["node_type"] == "dataset"} == {"a.x", "b.y"}

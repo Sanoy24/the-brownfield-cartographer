@@ -49,35 +49,59 @@ def _statements(text: str, dialect: str):
         local = [token for token in tokens if start <= token.start < end
                  and token.token_type != TokenType.SEMICOLON]
         if local:
-            expression = sqlglot.parse_one(text[start:end], dialect=dialect)
-            yield expression, (text.count("\n", 0, local[0].start) + 1,
-                               text.count("\n", 0, local[-1].end) + 1), text[start:end]
+            yield text[start:end], (text.count("\n", 0, local[0].start) + 1,
+                                    text.count("\n", 0, local[-1].end) + 1)
         start = end
 
 
-def analyze_sql_string(sql_text: str, source_file: str = "<inline>",
-                       dialect: str = DEFAULT_DIALECT) -> list[TransformationNode]:
+def sql_statements(sql_text: str, source_file: str = "<inline>",
+                   dialect: str = DEFAULT_DIALECT, errors: list[dict] | None = None) -> list[dict]:
+    """Return each statement's source tables, written table (None for queries), span and text.
+
+    Without `errors`, the first invalid or unsupported statement raises ValueError.
+    With `errors`, each such statement is appended there as {"line", "error"} and
+    the remaining statements are still returned.
+    """
     if not sql_text.strip():
         return []
-    transformations = []
     try:
-        statements = list(_statements(sql_text, dialect))
+        segments = list(_statements(sql_text, dialect))
     except sqlglot.errors.SqlglotError as exc:
         raise ValueError(f"Invalid SQL in {source_file}: {exc}") from exc
-    for statement, span, text in statements:
-        if not isinstance(statement, (exp.Select, exp.Union, exp.Create, exp.Insert)):
-            raise ValueError(f"Unsupported SQL statement in {source_file}: {statement.key}")
-        sources = _extract_source_tables(statement)
-        if sources:
+    results = []
+    for text, span in segments:
+        try:
+            statement = sqlglot.parse_one(text, dialect=dialect)
+            if not isinstance(statement, (exp.Select, exp.Union, exp.Create, exp.Insert)):
+                raise ValueError(f"Unsupported SQL statement in {source_file}: {statement.key}")
+        except (sqlglot.errors.SqlglotError, ValueError) as exc:
+            message = str(exc) if isinstance(exc, ValueError) else f"Invalid SQL in {source_file}: {exc}"
+            if errors is None:
+                raise ValueError(message) from exc
+            errors.append({"line": span[0], "error": message})
+            continue
+        writes = isinstance(statement, (exp.Create, exp.Insert))
+        results.append({"sources": sorted(_extract_source_tables(statement)),
+                        "target": _target(statement, source_file) if writes else None,
+                        "line_range": span, "text": text.strip()})
+    return results
+
+
+def analyze_sql_string(sql_text: str, source_file: str = "<inline>",
+                       dialect: str = DEFAULT_DIALECT, errors: list[dict] | None = None) -> list[TransformationNode]:
+    transformations = []
+    for statement in sql_statements(sql_text, source_file, dialect, errors):
+        if statement["sources"]:
             transformations.append(TransformationNode(
-                source_datasets=sorted(sources), target_datasets=[_target(statement, source_file)],
+                source_datasets=statement["sources"],
+                target_datasets=[statement["target"] or Path(source_file).stem],
                 transformation_type=TransformationType.SQL_QUERY, source_file=source_file,
-                line_range=span, sql_query_if_applicable=text.strip()[:500],
+                line_range=statement["line_range"], sql_query_if_applicable=statement["text"][:500],
             ))
     return transformations
 
 
-def analyze_sql_file(file_path: Path, repo_root: Path,
-                     dialect: str = DEFAULT_DIALECT) -> list[TransformationNode]:
+def analyze_sql_file(file_path: Path, repo_root: Path, dialect: str = DEFAULT_DIALECT,
+                     errors: list[dict] | None = None) -> list[TransformationNode]:
     return analyze_sql_string(file_path.read_text(encoding="utf-8"),
-                              file_path.relative_to(repo_root).as_posix(), dialect)
+                              file_path.relative_to(repo_root).as_posix(), dialect, errors)

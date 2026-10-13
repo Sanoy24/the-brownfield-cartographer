@@ -7,7 +7,21 @@ versions may contain breaking changes.
 
 ## [Unreleased]
 
+### Added
+
+- Lineage from SQL embedded in Python: `execute`, `executemany`,
+  `executescript`, `.sql()` (Spark, DuckDB), `read_sql`/`read_sql_query` and
+  `read_sql_table`, including SQLAlchemy `text()` and DB-API placeholders.
+  Queries count as reads of the surrounding function; `INSERT`/`CREATE ... AS`
+  become exact statement-level transformations. SQL is resolved from literals
+  and same-module constants; dynamic SQL is reported as a diagnostic.
+- Spark `DataFrameWriter` path writes such as `.write.parquet(path)`.
+- `python_etl` benchmark corpus.
+
 ### Changed
+
+- An unsupported or invalid SQL statement is reported on its own; the other
+  statements in the same file or script are still extracted.
 
 - The interactive `cartographer query` now runs on the shared query engine used
   by the other commands and the MCP server. It takes `REPO` and `--index-dir`

@@ -124,8 +124,8 @@ unchanged successful snapshots can reuse the complete index.
 
 | Input | Current support |
 | --- | --- |
-| Python | Functions/classes, supported absolute/relative imports; conservative literal I/O associations |
-| SQL | SELECT/UNION, CTAS and INSERT queries; statement spans and table dependencies |
+| Python | Functions/classes, supported absolute/relative imports; conservative literal I/O associations (pandas, Spark readers and writers). SQL passed to `execute`/`executemany`/`executescript`, `.sql()` and `read_sql` is parsed from literals and same-module constants, including `text()` and DB-API placeholders. Dynamic SQL is reported, not guessed; constants imported from other modules are not resolved |
+| SQL | SELECT/UNION, CTAS and INSERT queries; statement spans and table dependencies. Unsupported statements are reported individually without dropping the rest of the file |
 | dbt | Explicit manifest v12 ingestion for models, seeds, snapshots and sources; basic SQL/YAML fallback without a manifest |
 | Airflow | Experimental, limited task dependency regex |
 | JavaScript/TypeScript | `.js .mjs .cjs .jsx .ts .mts .cts .tsx`: functions, arrow functions, class methods; ESM, type-only, `require()` and `import()` imports with literal relative specifiers. Package imports are external; tsconfig path aliases are not resolved |
@@ -150,7 +150,7 @@ known gaps. It runs in CI.
 uv sync --frozen
 uv run --no-sync pytest -q
 uv run --no-sync ruff check src tests scripts
-uv run --no-sync mypy -p brownfield_cartographer.scanner -p brownfield_cartographer.persistence -p brownfield_cartographer.query_api -p brownfield_cartographer.analyzers.javascript_analyzer --follow-imports=skip
+uv run --no-sync mypy -p brownfield_cartographer.scanner -p brownfield_cartographer.persistence -p brownfield_cartographer.query_api -p brownfield_cartographer.analyzers.javascript_analyzer -p brownfield_cartographer.analyzers.embedded_sql -p brownfield_cartographer.analyzers.sql_lineage --follow-imports=skip
 uv build
 uv run --no-sync python scripts/check_wheel.py
 ```
