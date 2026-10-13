@@ -37,7 +37,8 @@ SOURCE_PATTERN = re.compile(
 # dbt Project Parsing
 # ---------------------------------------------------------------------------
 
-def parse_dbt_project(project_root: Path, source_files: tuple[Path, ...] | None = None) -> dict:
+def parse_dbt_project(project_root: Path, source_files: tuple[Path, ...] | None = None,
+                      repo_root: Path | None = None) -> dict:
     """
     Parse a dbt project and extract the full model dependency graph.
 
@@ -51,7 +52,10 @@ def parse_dbt_project(project_root: Path, source_files: tuple[Path, ...] | None 
           - "transformations": list[TransformationNode]
           - "datasets": list[DatasetNode]
           - "config_edges": list[ConfiguresEdge]
+
+    Evidence paths are relative to `repo_root`, which defaults to the project root.
     """
+    repo_root = repo_root or project_root
     transformations: list[TransformationNode] = []
     datasets: list[DatasetNode] = []
     config_edges: list[ConfiguresEdge] = []
@@ -79,7 +83,7 @@ def parse_dbt_project(project_root: Path, source_files: tuple[Path, ...] | None 
     model_files = [p for p in source_files if any(p.is_relative_to(d) for d in model_dirs)]
     if model_files:
         for sql_file in (p for p in model_files if p.suffix == ".sql"):
-            relative_path = str(sql_file.relative_to(project_root)).replace("\\", "/")
+            relative_path = sql_file.relative_to(repo_root).as_posix()
             model_name = sql_file.stem
             sql_text = sql_file.read_text(encoding="utf-8", errors="replace")
 
@@ -104,7 +108,7 @@ def parse_dbt_project(project_root: Path, source_files: tuple[Path, ...] | None 
 
     # --- Parse schema YAML files for dataset metadata ---
     for yml_file in (p for p in model_files if p.suffix in {".yml", ".yaml"}):
-        relative_yml = str(yml_file.relative_to(project_root)).replace("\\", "/")
+        relative_yml = yml_file.relative_to(repo_root).as_posix()
         try:
             schema_data = yaml.safe_load(yml_file.read_text(encoding="utf-8"))
         except Exception as exc:

@@ -7,6 +7,16 @@ versions may contain breaking changes.
 
 ## [Unreleased]
 
+### Fixed
+
+- dbt projects in subfolders were not detected, so their models were parsed as
+  plain SQL and lost all lineage. Every `dbt_project.yml` is now a project
+  root, evidence paths are relative to the repository, and the analysis
+  summary lists `dbt_projects`.
+- Macros, tests and analyses inside a dbt project were parsed as plain SQL,
+  making coverage falsely partial. No `.sql` file inside a dbt project is
+  parsed as plain SQL.
+
 ## [0.5.0] - 2026-10-13
 
 Focuses the project on dependencies that cross language boundaries. Adds
