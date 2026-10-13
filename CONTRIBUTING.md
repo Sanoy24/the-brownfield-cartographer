@@ -77,9 +77,7 @@ uv run --no-sync python scripts/check_wheel.py
 uv run --no-sync python scripts/check_wheel.py --mcp
 ```
 
-The default installation runs without model adapters. Legacy LLM enrichment
-dependencies are available through `uv sync --extra llm`; installing them does
-not opt the core into making model calls. Source fixtures should be small,
+Cartographer never calls a model and needs no credentials. Source fixtures should be small,
 deterministic, and runnable without network access or credentials. Test both
 extraction and queries, including evidence and incomplete-analysis behavior.
 

@@ -33,5 +33,4 @@ scope:
 
 Out of scope: findings that require an attacker to already control the local
 machine, secrets embedded in ordinary source files (which are not detected; see
-the README), and issues limited to the optional legacy `llm` extra's upstream
-model providers.
+the README).

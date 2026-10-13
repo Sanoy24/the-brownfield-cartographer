@@ -7,7 +7,7 @@ instant architectural awareness.
 
 Artifacts produced:
   - CODEBASE.md   — Living context file for AI agent injection
-  - onboarding_brief.md — Five FDE Day-One answers with evidence
+  - onboarding_brief.md — Key modules, data entry/exit points and change hotspots
   - cartography_trace.jsonl — Audit log of every analysis action
 """
 
@@ -99,18 +99,13 @@ CODEBASE_MD_SCHEMA = {
         },
         {
             "heading": "Known Debt",
-            "description": "Sub-sections for Circular Dependencies, Dead Code Candidates, and Documentation Drift.",
-            "populated_when": "Any of: circular deps detected, dead code flagged, or doc drift found.",
+            "description": "Sub-sections for Circular Dependencies and Dead Code Candidates.",
+            "populated_when": "Circular dependencies or dead code candidates are detected.",
         },
         {
             "heading": "High-Velocity Files",
             "description": "Markdown table of files with highest git commit count in last 30 days.",
             "populated_when": "Git history is available (not a bare/shallow clone).",
-        },
-        {
-            "heading": "Module Purpose Index",
-            "description": "Grouped by domain cluster, each module listed with its LLM-generated purpose statement.",
-            "populated_when": "Semanticist has generated purpose statements (requires LLM).",
         },
     ],
     "format": "GitHub-flavored Markdown with tables, code fences, and emoji indicators.",
@@ -133,7 +128,6 @@ def validate_codebase_md(content: str) -> dict[str, Any]:
         "Data Sources & Sinks",
         "Known Debt",
         "High-Velocity Files",
-        "Module Purpose Index",
     ]
 
     results: dict[str, dict[str, bool]] = {}
@@ -187,7 +181,6 @@ def generate_codebase_md(
     knowledge_graph: KnowledgeGraph,
     surveyor_results: dict[str, Any],
     hydrologist_results: dict[str, Any],
-    semanticist_results: dict[str, Any],
 ) -> str:
     """
     Generate the CODEBASE.md living context file.
@@ -199,7 +192,6 @@ def generate_codebase_md(
       - Data Sources & Sinks
       - Known Debt
       - High-Velocity Files
-      - Module Purpose Index
     """
     sections: list[str] = []
 
@@ -260,7 +252,6 @@ def generate_codebase_md(
     sections.append("## Known Debt\n")
     circular_deps = surveyor_results.get("circular_dependencies", [])
     dead_code = surveyor_results.get("dead_code_candidates", [])
-    doc_drift = semanticist_results.get("doc_drift_flags", {})
 
     debt_items = 0
     if circular_deps:
@@ -278,20 +269,6 @@ def generate_codebase_md(
         debt_items += len(dead_code)
         sections.append("")
 
-    if doc_drift:
-        sections.append("### Documentation Drift")
-        sections.append("_Modules where docstring contradicts actual implementation:_")
-        for path, drifts in list(doc_drift.items())[:15]:
-            for drift in drifts:
-                if isinstance(drift, dict):
-                    severity = drift.get("severity", "minor")
-                    severity_icon = {"critical": "🔴", "major": "🟡", "minor": "⚪"}.get(severity, "⚪")
-                    sections.append(f"- {severity_icon} `{path}` [{severity}]: {drift.get('description', '')}")
-                else:
-                    sections.append(f"- `{path}`: {drift}")
-                debt_items += 1
-        sections.append("")
-
     if debt_items == 0:
         sections.append("_No findings from the supported checks; this is not a complete debt assessment._\n")
 
@@ -307,31 +284,6 @@ def generate_codebase_md(
         sections.append("_No recent git history available (likely a shallow clone)._")
     sections.append("")
 
-    # --- Module Purpose Index ---
-    purpose_statements = semanticist_results.get("purpose_statements", {})
-    domain_clusters = semanticist_results.get("domain_clusters", {})
-
-    if purpose_statements:
-        sections.append("## Module Purpose Index\n")
-
-        # Group by domain if available
-        if domain_clusters:
-            domains: dict[str, list[str]] = {}
-            for path, domain in domain_clusters.items():
-                domains.setdefault(domain, []).append(path)
-
-            for domain, paths in sorted(domains.items()):
-                sections.append(f"### Domain: {domain}\n")
-                for path in sorted(paths):
-                    purpose = purpose_statements.get(path, "_No purpose generated_")
-                    sections.append(f"**`{path}`**: {purpose}\n")
-        else:
-            for path, purpose in sorted(purpose_statements.items()):
-                sections.append(f"**`{path}`**: {purpose}\n")
-    else:
-        sections.append("## Module Purpose Index\n")
-        sections.append("Static mode does not infer module purposes. Inspect symbols and dependencies in the index.\n")
-
     return "\n".join(sections)
 
 
@@ -340,40 +292,19 @@ def generate_codebase_md(
 # ---------------------------------------------------------------------------
 
 def generate_onboarding_brief(
-    day_one_answers: dict[str, str],
     knowledge_graph: KnowledgeGraph,
     surveyor_results: dict[str, Any],
     hydrologist_results: dict[str, Any],
 ) -> str:
-    """
-    Generate the onboarding_brief.md — the FDE Day-One Brief.
-
-    Formats the Five Day-One Answers with evidence citations and
-    supplementary data from the knowledge graph.
-    """
+    """Generate onboarding_brief.md from facts in the graph; nothing is inferred."""
     sections: list[str] = []
 
-    sections.append("# FDE Day-One Onboarding Brief\n")
-    sections.append(f"> Generated by The Brownfield Cartographer on {datetime.now(UTC).strftime('%Y-%m-%d %H:%M UTC')}\n")
-    sections.append("---\n")
+    sections.append("# Onboarding Brief\n")
+    sections.append(f"> Generated by The Brownfield Cartographer on {datetime.now(UTC).strftime('%Y-%m-%d %H:%M UTC')}.")
+    sections.append("> Static facts only. Use `cartographer impact` and `cartographer lineage` for details.\n")
 
-    questions = {
-        "q1": "What is the primary data ingestion path?",
-        "q2": "What are the 3–5 most critical output datasets/endpoints?",
-        "q3": "What is the blast radius if the most critical module fails?",
-        "q4": "Where is the business logic concentrated vs. distributed?",
-        "q5": "What has changed most frequently in the last 90 days (git velocity)?",
-    }
-
-    for key, question in questions.items():
-        sections.append(f"## {question}\n")
-        answer = day_one_answers.get(key, "_Answer not available — configure an LLM provider._")
-        sections.append(f"{answer}\n")
-        sections.append("---\n")
-
-    # Supplementary data
     graph_summary = knowledge_graph.summary()
-    sections.append("## Supplementary Metrics\n")
+    sections.append("## At a Glance\n")
     sections.append("| Metric | Value |")
     sections.append("|--------|-------|")
     sections.append(f"| Total modules | {graph_summary['modules']} |")
@@ -381,21 +312,34 @@ def generate_onboarding_brief(
     sections.append(f"| Total datasets | {graph_summary['datasets']} |")
     sections.append(f"| Total transformations | {graph_summary['transformations']} |")
     sections.append(f"| Circular dependencies | {graph_summary['circular_dependencies']} |")
-    sections.append(f"| Graph nodes | {graph_summary['total_nodes']} |")
-    sections.append(f"| Graph edges | {graph_summary['total_edges']} |")
+    sections.append("")
 
-    # Data sources & sinks summary
+    sections.append("## Most Depended-On Modules\n")
+    hubs = surveyor_results.get("top_architectural_hubs", [])[:5]
+    sections.extend(f"- `{hub['path']}`" for hub in hubs)
+    if not hubs:
+        sections.append("_No module dependencies detected._")
+    sections.append("")
+
+    sections.append("## Data Entry and Exit Points\n")
     sources = hydrologist_results.get("data_sources", [])
     sinks = hydrologist_results.get("data_sinks", [])
     if sources:
-        sections.append("\n### Data Entry Points")
-        for src in sources:
-            sections.append(f"- `{src}`")
+        sections.append("### Entry points (no upstream producer found)")
+        sections.extend(f"- `{src}`" for src in sources)
+        sections.append("")
     if sinks:
-        sections.append("\n### Data Exit Points")
-        for sink in sinks:
-            sections.append(f"- `{sink}`")
+        sections.append("### Exit points (no downstream consumer found)")
+        sections.extend(f"- `{sink}`" for sink in sinks)
+        sections.append("")
+    if not sources and not sinks:
+        sections.append("_No data lineage detected._\n")
 
+    sections.append("## Recent Change Hotspots\n")
+    velocity_files = surveyor_results.get("high_velocity_files", [])[:5]
+    sections.extend(f"- `{entry['path']}` ({entry['commits_30d']} commits in 30 days)" for entry in velocity_files)
+    if not velocity_files:
+        sections.append("_No recent git history available._")
     sections.append("")
     return "\n".join(sections)
 
@@ -428,7 +372,6 @@ class Archivist:
         knowledge_graph: KnowledgeGraph,
         surveyor_results: dict[str, Any],
         hydrologist_results: dict[str, Any],
-        semanticist_results: dict[str, Any],
         cartography_dir: Path,
     ) -> dict[str, Any]:
         """
@@ -457,14 +400,12 @@ class Archivist:
             knowledge_graph,
             surveyor_results,
             hydrologist_results,
-            semanticist_results,
         )
 
-        # Validate that all required sections are populated
+        # Empty sections are legitimate results; record them without warning.
         validation = validate_codebase_md(codebase_md)
-        if validation["warnings"]:
-            for warning in validation["warnings"]:
-                logger.warning("CODEBASE.md validation: %s", warning)
+        for warning in validation["warnings"]:
+            logger.debug("CODEBASE.md validation: %s", warning)
 
         codebase_path = cartography_dir / "CODEBASE.md"
         codebase_path.write_text(codebase_md, encoding="utf-8")
@@ -482,9 +423,7 @@ class Archivist:
             )
 
         # --- Generate onboarding_brief.md ---
-        day_one_answers = semanticist_results.get("day_one_answers", {})
         brief_md = generate_onboarding_brief(
-            day_one_answers,
             knowledge_graph,
             surveyor_results,
             hydrologist_results,

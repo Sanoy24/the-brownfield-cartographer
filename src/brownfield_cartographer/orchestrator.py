@@ -99,17 +99,13 @@ def _artifact_directory(root: Path, name: str) -> Path:
 
 
 class Orchestrator:
-    """Run static analysis offline; legacy model enrichment requires opt-in."""
+    """Run static analysis offline."""
 
-    def __init__(self, *, enable_llm: bool = False, scan_settings: ScanSettings | None = None):
+    def __init__(self, *, scan_settings: ScanSettings | None = None):
         self.knowledge_graph = KnowledgeGraph()
         self.surveyor = Surveyor()
         self.hydrologist = Hydrologist()
         self.archivist = Archivist()
-        self.semanticist = None
-        if enable_llm:
-            from brownfield_cartographer.agents.semanticist import Semanticist
-            self.semanticist = Semanticist()
         self.scan_settings = scan_settings or ScanSettings()
         self._temp_dir = None
 
@@ -125,7 +121,7 @@ class Orchestrator:
         trace.log(agent="orchestrator", action="pipeline_started",
                   details={"repo_root": str(repo_root), "scan": inventory.report()})
         changed = None if full else _check_incremental(artifacts, repo_root, inventory, self.scan_settings)
-        if changed == set() and inventory.complete and self.semanticist is None:
+        if changed == set() and inventory.complete:
             try:
                 summary = json.loads((artifacts / "analysis_summary.json").read_text(encoding="utf-8"))
                 if summary.get("status") == "complete":
@@ -141,9 +137,6 @@ class Orchestrator:
                                    "artifact_directory": str(artifacts.resolve()),
                                    "changed_files": sorted(changed) if changed is not None else None}
         errors = {}
-        semantic = {"purpose_statements": {}, "doc_drift_flags": {}, "domain_clusters": {},
-                    "day_one_answers": {f"q{i}": "Not inferred; static analysis only" for i in range(1, 6)},
-                    "llm_provider": "none", "token_budget": {"used": 0, "max": 0}}
         try:
             for name, stage in (("surveyor", self.surveyor), ("hydrologist", self.hydrologist)):
                 try:
@@ -154,13 +147,6 @@ class Orchestrator:
                     results[name] = {}
                     logger.error("%s failed: %s", name, exc)
                     trace.log(agent=name, action="failed", confidence=0, details={"error": str(exc)})
-            if self.semanticist is not None:
-                try:
-                    semantic = self.semanticist.run(repo_root, self.knowledge_graph,
-                        surveyor_results=results["surveyor"], hydrologist_results=results["hydrologist"])
-                except Exception as exc:
-                    errors["semanticist"] = str(exc)
-            results["semanticist"] = semantic
             final_inventory = scan_repository(repo_root, self.scan_settings)
             if final_inventory.fingerprints != inventory.fingerprints:
                 errors["snapshot"] = "Repository changed during analysis; retry on a stable working tree"
@@ -180,7 +166,7 @@ class Orchestrator:
             self.knowledge_graph.serialize_lineage_graph(artifacts / "lineage_graph.json")
             try:
                 results["archivist"] = self.archivist.run(repo_root, self.knowledge_graph,
-                    results["surveyor"], results["hydrologist"], semantic, artifacts)
+                    results["surveyor"], results["hydrologist"], artifacts)
             except Exception as exc:
                 errors["archivist"] = str(exc)
             results["graph_summary"] = self.knowledge_graph.summary()

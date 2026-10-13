@@ -7,6 +7,27 @@ versions may contain breaking changes.
 
 ## [Unreleased]
 
+### Changed
+
+- The interactive `cartographer query` now runs on the shared query engine used
+  by the other commands and the MCP server. It takes `REPO` and `--index-dir`
+  like the other commands, and supports `find`, `impact`, `deps`, `dependents`,
+  `lineage`, `lineage-down`, `context` and `overview`.
+- `onboarding_brief.md` lists key modules, data entry and exit points, and
+  change hotspots instead of five placeholder questions.
+- `analysis_summary.json` no longer contains a `semanticist` section.
+- The README describes the project's focus: dependencies that cross language
+  boundaries, starting with data lineage.
+
+### Removed
+
+- The `llm` extra and all model-based code: purpose statements, documentation
+  drift, domain clustering, day-one answers, and the LangGraph chat agent.
+  `Orchestrator(enable_llm=...)` is no longer accepted.
+- The duplicate `navigator` query implementation, and the Documentation Drift
+  and Module Purpose Index sections of `CODEBASE.md`.
+- `.env.example`, since nothing reads environment configuration.
+
 ## [0.4.0] - 2026-10-12
 
 Adds JavaScript/TypeScript structure and an accuracy benchmark. The `mcp` extra

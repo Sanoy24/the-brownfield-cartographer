@@ -59,16 +59,6 @@ Changelog = "https://github.com/Sanoy24/the-brownfield-cartographer/blob/main/CH
 
 [project.optional-dependencies]
 mcp = ["mcp>=2.3,<3"]
-llm = [
-    # Legacy, explicitly enabled enrichment; the core never calls a model.
-    "langchain-core>=0.3",
-    "langchain-openai>=0.3",
-    "langchain-google-genai>=2.0",
-    "langchain-ollama>=0.3",
-    "langgraph>=0.2",
-    # Domain clustering
-    "scikit-learn>=1.5",
-]
 
 [dependency-groups]
 dev = ["pytest>=8,<10", "ruff>=0.11", "mypy>=1.15"]
@@ -81,7 +71,7 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP"]
-# Long lines are tolerated in legacy modules; formatting is not yet enforced.
+# Long lines are tolerated; formatting is not yet enforced.
 ignore = ["E501", "B008", "UP042"]
 
 [project.scripts]
