@@ -137,6 +137,11 @@ or removed artifacts produce tool errors instead of serving a cached graph.
 Maximum output is 64 KB; result counts are capped at 200 and traversal depth at
 20. Code excerpts contain at most 200 lines/32 KB. Ambiguous names and invalid
 arguments produce tool errors, rather than choosing an arbitrary match.
+Traversals (`trace_dependencies`, `analyze_impact`, `trace_data_lineage`) list
+datasets, modules, functions and tasks. Internal transformation nodes are
+followed but not listed and do not count toward `depth`; each result's
+evidence cites the file and lines of the transformation that connects it.
+`data.stopped_by` is `depth` or `limit` when more results exist.
 
 The server uses MCP Python SDK 2.x (`mcp>=2.3,<3`); see the
 [official MCP SDK documentation](https://py.sdk.modelcontextprotocol.io/v2/).
