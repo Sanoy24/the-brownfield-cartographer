@@ -144,7 +144,7 @@ def test_invalid_index_is_a_query_error(indexed_repo, content):
 def test_removed_index_is_not_served_from_memory(indexed_repo):
     engine = QueryEngine.open(indexed_repo)
     (Path(engine.index_dir) / "index.json").unlink()
-    with pytest.raises(QueryError, match="No versioned index"):
+    with pytest.raises(QueryError, match="No index found"):
         engine.get_architecture()
 
 

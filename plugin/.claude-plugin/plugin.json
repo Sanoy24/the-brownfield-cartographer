@@ -1,0 +1,14 @@
+{
+  "name": "brownfield-cartographer",
+  "displayName": "Brownfield Cartographer",
+  "version": "0.7.0",
+  "description": "What breaks if I change this? Local, evidence-backed impact and data lineage (tables, columns, Airflow tasks) across SQL, dbt, Python and TypeScript.",
+  "author": {
+    "name": "Yonas Mekonnen",
+    "url": "https://github.com/Sanoy24"
+  },
+  "homepage": "https://github.com/Sanoy24/the-brownfield-cartographer#readme",
+  "repository": "https://github.com/Sanoy24/the-brownfield-cartographer",
+  "license": "Apache-2.0",
+  "keywords": ["data-lineage", "impact-analysis", "dbt", "airflow", "sql", "mcp"]
+}

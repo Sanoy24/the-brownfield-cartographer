@@ -7,6 +7,21 @@ versions may contain breaking changes.
 
 ## [Unreleased]
 
+### Added
+
+- Claude Code plugin and marketplace in this repository
+  (`/plugin marketplace add Sanoy24/the-brownfield-cartographer`). It bundles
+  the MCP server, run through `uvx` for the current project, and a
+  `data-impact` skill describing which tool answers which question.
+
+### Changed
+
+- The MCP server starts before a repository is analyzed. Tools return the exact
+  `cartographer analyze` command (including a `uvx` form) until an index
+  exists, then use it without a restart. Server instructions tell assistants to
+  run that command and retry; in a live Claude Code session the assistant did
+  so unprompted.
+
 ## [0.7.0] - 2026-10-13
 
 Fixes MCP error messages that SDK 2.x had hidden from assistants, adds column

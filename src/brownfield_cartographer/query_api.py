@@ -61,7 +61,10 @@ class QueryEngine:
                 raise QueryError("Index paths must not pass through symlinks or junctions")
         index_path = index_dir / "index.json"
         if index_path.is_symlink() or not index_path.is_file():
-            raise QueryError("No versioned index found; run cartographer analyze first")
+            raise QueryError(
+                f'No index found for this repository. Build it (offline; repository code is not executed) with '
+                f'`cartographer analyze "{repo_root}"`, or without installing: '
+                f'`uvx --from brownfield-cartographer cartographer analyze "{repo_root}"`. Then retry this tool.')
         if index_path.stat().st_size > 100 * 1024 * 1024:
             raise QueryError("Index exceeds the local query size limit")
         summary_path = index_dir / "analysis_summary.json"
@@ -90,8 +93,27 @@ class QueryEngine:
         engine.summary_stamp = _artifact_stamp(summary_path)
         return engine
 
+    @classmethod
+    def open_lazy(cls, repo_root: Path, index_dir: Path | None = None) -> QueryEngine:
+        """Open the index, or return an engine that opens it on first use once analysis has run."""
+        try:
+            return cls.open(repo_root, index_dir)
+        except QueryError:
+            if repo_root.is_symlink() or repo_root.is_junction():
+                raise
+            engine = cls.__new__(cls)
+            engine.graph = None  # type: ignore[assignment]
+            engine.repo_root = repo_root.resolve(strict=True)
+            engine.index_dir = index_dir
+            engine.index_stamp = engine.summary_stamp = None
+            return engine
+
     def _refresh(self) -> None:
         """Observe graph and run-status changes without writing or analyzing."""
+        if self.graph is None:
+            # Not analyzed when the engine was created; open as soon as an index exists.
+            self.__dict__.update(type(self).open(self.repo_root, self.index_dir).__dict__)
+            return
         if self.index_dir is None:
             return
         try:
