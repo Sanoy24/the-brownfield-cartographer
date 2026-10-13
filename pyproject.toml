@@ -1,6 +1,6 @@
 [project]
 name = "brownfield-cartographer"
-version = "0.4.0"
+version = "0.5.0"
 description = "Local-first, deterministic repository structure and data lineage analysis"
 authors = [
     { name = "Yonas Mekonnen", email = "myonas886@gmail.com" }

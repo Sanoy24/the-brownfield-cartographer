@@ -7,6 +7,14 @@ versions may contain breaking changes.
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-13
+
+Focuses the project on dependencies that cross language boundaries. Adds
+lineage from SQL embedded in Python and from `UPDATE`, `DELETE` and `MERGE`,
+and removes all model-based code. Breaking: the `llm` extra,
+`Orchestrator(enable_llm=...)` and artifact-directory paths for
+`cartographer query` are gone.
+
 ### Added
 
 - Lineage from SQL embedded in Python: `execute`, `executemany`,
@@ -115,7 +123,8 @@ First release published to PyPI as `brownfield-cartographer`.
 - Distinct transformation IDs and statement-specific SQL sources and targets.
 - Failed or partial runs no longer advance the successful checkpoint.
 
-[Unreleased]: https://github.com/Sanoy24/the-brownfield-cartographer/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/Sanoy24/the-brownfield-cartographer/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/Sanoy24/the-brownfield-cartographer/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/Sanoy24/the-brownfield-cartographer/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/Sanoy24/the-brownfield-cartographer/releases/tag/v0.3.0
 [0.2.0]: https://github.com/Sanoy24/the-brownfield-cartographer/tree/6079f70
