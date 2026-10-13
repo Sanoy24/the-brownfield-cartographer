@@ -1,21 +1,63 @@
 {
-  "description": "Python ETL package with SQL embedded in pandas, DB-API cursors and Spark: pyformat placeholders, a query constant imported from another module, a multi-statement script containing an unsupported DELETE, a Spark DataFrameWriter path write, and an f-string backfill. run_maintenance passes a non-SQL string and an opaque variable, which must not create edges.",
-  "status": "partial",
+  "description": "Python ETL package with SQL embedded in pandas, DB-API cursors and Spark: pyformat placeholders, a query constant imported from another module, a multi-statement script with a DELETE, a Spark DataFrameWriter path write, and an f-string backfill. run_maintenance passes a non-SQL string and an opaque variable, which must not create edges.",
+  "status": "complete",
   "lineage": [
-    ["raw.users", "staging/active_users.parquet"],
-    ["raw.subscriptions", "staging/active_users.parquet"],
-    ["raw.orders", "staging/orders.csv"],
-    ["staging.orders", "marts.daily_revenue"],
-    ["marts.customer_totals", "marts.top_customers"],
-    ["staging.orders", "marts.customer_totals"],
-    ["marts.customer_totals", "exports/customer_totals"],
-    ["staging.events", "marts.daily"]
+    [
+      "raw.users",
+      "staging/active_users.parquet"
+    ],
+    [
+      "raw.subscriptions",
+      "staging/active_users.parquet"
+    ],
+    [
+      "raw.orders",
+      "staging/orders.csv"
+    ],
+    [
+      "staging.orders",
+      "marts.daily_revenue"
+    ],
+    [
+      "marts.customer_totals",
+      "marts.top_customers"
+    ],
+    [
+      "staging.orders",
+      "marts.customer_totals"
+    ],
+    [
+      "marts.customer_totals",
+      "exports/customer_totals"
+    ],
+    [
+      "staging.events",
+      "marts.daily"
+    ]
   ],
   "known_gaps": {
     "lineage": [
-      {"edge": ["raw.users", "staging/active_users.parquet"], "reason": "SQL constants imported from another module are not resolved."},
-      {"edge": ["raw.subscriptions", "staging/active_users.parquet"], "reason": "SQL constants imported from another module are not resolved."},
-      {"edge": ["staging.events", "marts.daily"], "reason": "f-string SQL is reported as dynamic, even when only values are interpolated."}
+      {
+        "edge": [
+          "raw.users",
+          "staging/active_users.parquet"
+        ],
+        "reason": "SQL constants imported from another module are not resolved."
+      },
+      {
+        "edge": [
+          "raw.subscriptions",
+          "staging/active_users.parquet"
+        ],
+        "reason": "SQL constants imported from another module are not resolved."
+      },
+      {
+        "edge": [
+          "staging.events",
+          "marts.daily"
+        ],
+        "reason": "f-string SQL is reported as dynamic, even when only values are interpolated."
+      }
     ]
   }
 }

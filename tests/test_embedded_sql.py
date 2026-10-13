@@ -104,7 +104,7 @@ def test_non_sql_strings_are_ignored(tmp_path):
     assert diagnostics == []
 
 
-@pytest.mark.parametrize("statement", ["UPDATE marts.daily SET n = 0", "SELECT FROM WHERE"])
+@pytest.mark.parametrize("statement", ["SELECT FROM WHERE", "DELETE FROM WHERE"])
 def test_unsupported_or_invalid_sql_keeps_other_lineage_and_makes_coverage_partial(tmp_path, statement):
     status, edges, diagnostics, _ = _analyze(tmp_path, f"""
         import pandas as pd
@@ -121,11 +121,11 @@ def test_unsupported_or_invalid_sql_keeps_other_lineage_and_makes_coverage_parti
 def test_supported_statements_survive_an_unsupported_one_in_the_same_script(tmp_path):
     status, edges, diagnostics, _ = _analyze(tmp_path, """
         def refresh(cur):
-            cur.executescript("CREATE TABLE a.top AS SELECT id FROM a.totals; DELETE FROM a.stale; INSERT INTO a.log SELECT * FROM a.top;")
+            cur.executescript("CREATE TABLE a.top AS SELECT id FROM a.totals; DELETE FROM WHERE; INSERT INTO a.log SELECT * FROM a.top;")
     """)
     assert status == "partial"
     assert edges == {("a.totals", "a.top"), ("a.top", "a.log")}
-    assert any("delete" in d["error"] and d.get("incomplete") for d in diagnostics)
+    assert any("Invalid SQL" in d["error"] and d.get("incomplete") for d in diagnostics)
 
 
 def test_spark_dataframe_writer_paths_are_writes(tmp_path):

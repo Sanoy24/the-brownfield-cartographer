@@ -17,11 +17,15 @@ versions may contain breaking changes.
   and same-module constants; dynamic SQL is reported as a diagnostic.
 - Spark `DataFrameWriter` path writes such as `.write.parquet(path)`.
 - `python_etl` benchmark corpus.
+- Table lineage for `UPDATE`, `DELETE` and `MERGE`: the written table depends
+  on every other table the statement reads.
 
 ### Changed
 
 - An unsupported or invalid SQL statement is reported on its own; the other
   statements in the same file or script are still extracted.
+- Statements without table lineage (`DROP`, `TRUNCATE`, `ALTER`, transactions,
+  `SET`, `GRANT`, `CREATE INDEX`/`SCHEMA`) no longer make coverage partial.
 
 - The interactive `cartographer query` now runs on the shared query engine used
   by the other commands and the MCP server. It takes `REPO` and `--index-dir`

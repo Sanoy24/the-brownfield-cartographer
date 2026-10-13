@@ -1,4 +1,11 @@
-"""Conservative statement-level SQL reads/writes with exact statement spans."""
+"""Conservative statement-level SQL reads/writes with exact statement spans.
+
+Queries (SELECT, UNION) read tables. CREATE ... AS and INSERT write their target
+from the query they contain. UPDATE, DELETE and MERGE write their target from
+every other table the statement reads (FROM/USING clauses, joins, subqueries).
+Statements without table-to-table lineage (DROP, ALTER, transactions, indexes)
+are skipped; anything else, such as COPY, is reported as unsupported.
+"""
 from __future__ import annotations
 
 from pathlib import Path
@@ -21,7 +28,29 @@ def _qualified(table: exp.Table) -> str:
     return ".".join(part.name for part in table.parts)
 
 
+DML = (exp.Update, exp.Delete, exp.Merge)
+SUPPORTED_STATEMENTS = (exp.Select, exp.Union, exp.Create, exp.Insert, *DML)
+NO_LINEAGE = (exp.Drop, exp.TruncateTable, exp.Alter, exp.Transaction, exp.Commit, exp.Rollback,
+              exp.Set, exp.Use, exp.Grant, exp.Analyze)
+
+
+def _has_no_lineage(statement: exp.Expression) -> bool:
+    if isinstance(statement, exp.Create):
+        return statement.expression is None and str(statement.args.get("kind", "")).upper() != "TABLE"
+    return isinstance(statement, NO_LINEAGE)
+
+
+def _dml_sources(statement: exp.Expression) -> set[str]:
+    target = statement.this
+    ctes = {cte.alias for cte in statement.find_all(exp.CTE)}
+    names = {_qualified(table) for table in statement.find_all(exp.Table)
+             if table is not target and not (len(table.parts) == 1 and table.name in ctes)}
+    return names - {_qualified(target)} if isinstance(target, exp.Table) else names
+
+
 def _extract_source_tables(expression: exp.Expression) -> set[str]:
+    if isinstance(expression, DML):
+        return _dml_sources(expression)
     query = expression.expression if isinstance(expression, (exp.Create, exp.Insert)) else expression
     if query is None:
         return set()
@@ -30,7 +59,7 @@ def _extract_source_tables(expression: exp.Expression) -> set[str]:
 
 
 def _target(expression: exp.Expression, source_file: str) -> str:
-    if isinstance(expression, (exp.Create, exp.Insert)):
+    if isinstance(expression, (exp.Create, exp.Insert, *DML)):
         table = expression.this
         if isinstance(table, exp.Schema):
             table = table.this
@@ -72,7 +101,9 @@ def sql_statements(sql_text: str, source_file: str = "<inline>",
     for text, span in segments:
         try:
             statement = sqlglot.parse_one(text, dialect=dialect)
-            if not isinstance(statement, (exp.Select, exp.Union, exp.Create, exp.Insert)):
+            if _has_no_lineage(statement):
+                continue
+            if not isinstance(statement, SUPPORTED_STATEMENTS):
                 raise ValueError(f"Unsupported SQL statement in {source_file}: {statement.key}")
         except (sqlglot.errors.SqlglotError, ValueError) as exc:
             message = str(exc) if isinstance(exc, ValueError) else f"Invalid SQL in {source_file}: {exc}"
@@ -80,7 +111,7 @@ def sql_statements(sql_text: str, source_file: str = "<inline>",
                 raise ValueError(message) from exc
             errors.append({"line": span[0], "error": message})
             continue
-        writes = isinstance(statement, (exp.Create, exp.Insert))
+        writes = isinstance(statement, (exp.Create, exp.Insert, *DML))
         results.append({"sources": sorted(_extract_source_tables(statement)),
                         "target": _target(statement, source_file) if writes else None,
                         "line_range": span, "text": text.strip()})

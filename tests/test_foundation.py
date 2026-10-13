@@ -325,7 +325,7 @@ def test_pipeline_worktree_full_equivalence(tmp_path, operation):
 
 def test_sql_file_keeps_statements_around_an_unsupported_one(tmp_path):
     (tmp_path / "job.sql").write_text(
-        "CREATE TABLE a.x AS SELECT * FROM b.y;\nUPDATE a.x SET n = 1;\nINSERT INTO a.z SELECT * FROM a.x;\n")
+        "CREATE TABLE a.x AS SELECT * FROM b.y;\nCOPY a.old FROM 'f.csv';\nINSERT INTO a.z SELECT * FROM a.x;\n")
     from brownfield_cartographer.orchestrator import Orchestrator
     assert Orchestrator().run(str(tmp_path))["status"] == "partial"
     lineage = QueryEngine.open(tmp_path).trace_data_lineage("a.z")["data"]["results"]
