@@ -17,6 +17,7 @@ from typing import Any
 
 import networkx as nx
 
+from brownfield_cartographer.analyzers import embedded_sql
 from brownfield_cartographer.analyzers.dag_config_parser import (
     parse_airflow_dag,
     parse_dbt_project,
@@ -24,6 +25,7 @@ from brownfield_cartographer.analyzers.dag_config_parser import (
 from brownfield_cartographer.analyzers.dbt_manifest import parse_dbt_manifest
 from brownfield_cartographer.analyzers.sql_lineage import (
     analyze_sql_file,
+    sql_statements,
 )
 from brownfield_cartographer.graph.knowledge_graph import KnowledgeGraph
 from brownfield_cartographer.models.schemas import (
@@ -77,14 +79,17 @@ SQLALCHEMY_PATTERNS = [
 
 
 def _analyze_python_data_flow(
-    file_path: Path, repo_root: Path
+    file_path: Path, repo_root: Path, diagnostics: list[dict] | None = None,
 ) -> list[TransformationNode]:
     """
     Scan a Python file for data read/write operations.
 
     Use Python AST calls to associate supported literal reads/writes per scope.
     Associations are conservative heuristics, not exact dataframe provenance.
+    Embedded SQL queries count as scope reads; embedded SQL writes become exact
+    statement-level transformations. Problems are appended to `diagnostics`.
     """
+    diagnostics = diagnostics if diagnostics is not None else []
     relative_path = str(file_path.relative_to(repo_root)).replace("\\", "/")
 
     try:
@@ -108,18 +113,58 @@ def _analyze_python_data_flow(
                 yield child
             yield from calls_in_scope(child)
 
+    module_constants = embedded_sql.string_constants(syntax)
     scopes = [syntax, *(n for n in ast.walk(syntax) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)))]
     for scope in scopes:
         reads, writes, locations = [], [], []
+        constants = module_constants if scope is syntax else {**module_constants, **embedded_sql.string_constants(scope)}
         for call in calls_in_scope(scope):
             if not isinstance(call.func, ast.Attribute):
                 continue
             method = call.func.attr
+            span = (call.lineno, call.end_lineno or call.lineno)
+            if method in embedded_sql.SQL_METHODS:
+                argument = embedded_sql.sql_argument(call)
+                sql, dynamic = embedded_sql.resolve_sql(argument, constants) if argument is not None else (None, False)
+                if dynamic:
+                    diagnostics.append({"path": relative_path, "line": call.lineno, "incomplete": False,
+                                        "error": "Dynamic SQL is not resolved; its lineage is not recorded"})
+                if sql is None:
+                    continue
+                errors: list[dict] = []
+                try:
+                    statements = sql_statements(embedded_sql.normalize_placeholders(sql), relative_path, errors=errors)
+                except ValueError as exc:
+                    errors.append({"error": str(exc)})
+                    statements = []
+                diagnostics.extend({"path": relative_path, "line": call.lineno, "incomplete": True,
+                                    "error": f"Embedded SQL at line {call.lineno}: {error['error']}"} for error in errors)
+                for statement in statements:
+                    if statement["target"] is None:
+                        reads.extend(statement["sources"])
+                        locations.append(span)
+                    elif statement["sources"]:
+                        transformations.append(TransformationNode(
+                            source_file=relative_path, source_datasets=statement["sources"],
+                            target_datasets=[statement["target"]], transformation_type=TransformationType.SQL_QUERY,
+                            line_range=span, sql_query_if_applicable=statement["text"][:500],
+                            analysis_method="embedded_sql", confidence="syntax"))
+                    else:
+                        writes.append(statement["target"])
+                        locations.append(span)
+                continue
+            if method in embedded_sql.TABLE_READ_METHODS:
+                argument = embedded_sql.sql_argument(call)
+                table = argument.value if isinstance(argument, ast.Constant) and isinstance(argument.value, str) else None
+                reads.append(table or f"<unresolved:{relative_path}:{call.lineno}>")
+                locations.append(span)
+                continue
             name = ast.unparse(call.func.value)
             read = ((name in aliases and method in {"read_csv", "read_parquet", "read_excel", "read_json"})
                     or (name == "spark.read" and method in {"csv", "parquet", "json", "table"})
                     or (name == "spark" and method == "table"))
-            write = method in {"to_csv", "to_parquet", "to_excel", "to_json", "to_sql", "saveAsTable"}
+            write = (method in {"to_csv", "to_parquet", "to_excel", "to_json", "to_sql", "saveAsTable"}
+                     or (".write" in f".{name}" and method in {"parquet", "csv", "json", "orc", "text", "save"}))
             if not (read or write):
                 continue
             value = call.args[0] if call.args else next((k.value for k in call.keywords if k.arg in
@@ -265,17 +310,19 @@ class Hydrologist:
         sql_files = [f for f in self.inventory.files if f.suffix == ".sql"
                      and f.relative_to(repo_root).as_posix() not in dbt_files]
         for sql_file in sql_files:
+            relative = sql_file.relative_to(repo_root).as_posix()
+            errors: list[dict] = []
             try:
-                all_transformations.extend(analyze_sql_file(sql_file, repo_root))
+                all_transformations.extend(analyze_sql_file(sql_file, repo_root, errors=errors))
             except (ValueError, OSError) as exc:
-                self.diagnostics.append({"path": sql_file.relative_to(repo_root).as_posix(),
-                                         "error": str(exc), "incomplete": True})
+                errors.append({"error": str(exc)})
+            self.diagnostics.extend({"path": relative, "incomplete": True, **error} for error in errors)
         logger.info("Analyzed %d SQL files", len(sql_files))
 
         py_files = [f for f in self.inventory.files if f.suffix == ".py"]
         for py_file in py_files:
             try:
-                all_transformations.extend(_analyze_python_data_flow(py_file, repo_root))
+                all_transformations.extend(_analyze_python_data_flow(py_file, repo_root, self.diagnostics))
             except (ValueError, SyntaxError, OSError) as exc:
                 self.diagnostics.append({"path": py_file.relative_to(repo_root).as_posix(),
                                          "error": str(exc), "incomplete": True})
@@ -285,72 +332,6 @@ class Hydrologist:
                 all_transformations.extend(parse_airflow_dag(dag_file, repo_root))
 
         return all_transformations, all_datasets, len(sql_files), len(py_files)
-
-    def _run_incremental(
-        self,
-        repo_root: Path,
-        knowledge_graph: KnowledgeGraph,
-        changed_files: set[str],
-    ) -> dict[str, Any]:
-        """Re-analyze lineage only for changed files and merge into the graph."""
-        logger.info(
-            "Hydrologist: incremental update for %d changed files", len(changed_files)
-        )
-        knowledge_graph.remove_transformation_nodes_for_files(changed_files)
-
-        all_transformations: list[TransformationNode] = []
-        all_datasets: list[DatasetNode] = []
-        sql_count = 0
-        py_count = 0
-
-        for rel_path in changed_files:
-            if not rel_path.strip():
-                continue
-            path = (repo_root / rel_path).resolve()
-            if not path.exists() or not path.is_file():
-                continue
-            if rel_path.endswith(".sql"):
-                all_transformations.extend(analyze_sql_file(path, repo_root))
-                sql_count += 1
-            elif rel_path.endswith(".py"):
-                if "dags" in path.parts:
-                    all_transformations.extend(parse_airflow_dag(path, repo_root))
-                else:
-                    all_transformations.extend(
-                        _analyze_python_data_flow(path, repo_root)
-                    )
-                py_count += 1
-
-        for dataset in all_datasets:
-            knowledge_graph.add_dataset_node(dataset)
-        for transformation in all_transformations:
-            knowledge_graph.add_transformation_node(transformation)
-
-        lineage_subgraph = knowledge_graph.get_lineage_subgraph()
-        sources = self._find_sources(lineage_subgraph)
-        sinks = self._find_sinks(lineage_subgraph)
-
-        summary = {
-            "total_transformations": len(all_transformations),
-            "total_datasets": len(all_datasets),
-            "sql_files_analyzed": sql_count,
-            "python_files_scanned": py_count,
-            "data_sources": sorted(sources),
-            "data_sinks": sorted(sinks),
-            "lineage_nodes": lineage_subgraph.number_of_nodes(),
-            "lineage_edges": lineage_subgraph.number_of_edges(),
-        }
-        logger.info(
-            "Hydrologist incremental complete: %d new transformations, %d sources, %d sinks",
-            len(all_transformations),
-            len(sources),
-            len(sinks),
-        )
-        return summary
-
-    # ------------------------------------------------------------------
-    # Lineage Query Methods
-    # ------------------------------------------------------------------
 
     @staticmethod
     def blast_radius(knowledge_graph: KnowledgeGraph, node_name: str) -> list[str]:
