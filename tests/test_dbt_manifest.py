@@ -176,3 +176,55 @@ def test_selected_artifact_cannot_cross_linked_ancestor(manifest_repo, monkeypat
     assert inventory.dbt_manifest_content is None
     assert "target/manifest.json" not in inventory.fingerprints
     assert any(row.reason == "symlink" for row in inventory.diagnostics)
+
+
+@pytest.fixture
+def compiled_manifest():
+    def resource(uid, path, relation, dependencies=(), compiled=None):
+        node = {"unique_id": uid, "resource_type": uid.split(".")[0], "original_file_path": path,
+                "depends_on": {"nodes": list(dependencies)}, "relation_name": relation}
+        if compiled is not None:
+            node["compiled_code"] = compiled
+        return node
+    return {"metadata": {"dbt_schema_version": SCHEMA_URL, "adapter_type": "duckdb"}, "nodes": {
+        "model.shop.stg_orders": resource(
+            "model.shop.stg_orders", "models/stg_orders.sql", '"warehouse"."main"."stg_orders"',
+            ["source.shop.raw.orders"],
+            'with source as (select * from "warehouse"."raw"."orders"), '
+            "renamed as (select id as order_id, amount / 100 as amount from source) select * from renamed"),
+        "model.shop.orders": resource(
+            "model.shop.orders", "models/orders.sql", '"warehouse"."main"."orders"', ["model.shop.stg_orders"],
+            'select o.order_id, round(o.amount, 2) as rounded from "WAREHOUSE"."MAIN"."STG_ORDERS" as o'),
+        "model.shop.legacy": resource("model.shop.legacy", "models/legacy.sql", '"warehouse"."main"."legacy"',
+                                      ["model.shop.orders"]),
+    }, "sources": {"source.shop.raw.orders": resource(
+        "source.shop.raw.orders", "models/sources.yml", '"warehouse"."raw"."orders"')}}
+
+
+def test_compiled_sql_gives_column_lineage_in_dbt_identities(compiled_manifest):
+    result = parse_dbt_manifest(json.dumps(compiled_manifest), "target/manifest.json")
+    by_target = {t.target_datasets[0]: t for t in result["transformations"]}
+    assert {c["target"]: (c["sources"], c["kind"]) for c in by_target["model.shop.stg_orders"].column_lineage} == {
+        "order_id": (["source.shop.raw.orders::id"], "copy"),
+        "amount": (["source.shop.raw.orders::amount"], "derived"),
+    }
+    assert {c["target"]: (c["sources"], c["kind"]) for c in by_target["model.shop.orders"].column_lineage} == {
+        "order_id": (["model.shop.stg_orders::order_id"], "copy"),
+        "rounded": (["model.shop.stg_orders::amount"], "derived"),
+    }
+    assert by_target["model.shop.legacy"].column_lineage == []
+    notes = [d for d in result["diagnostics"] if "dbt compile" in d["error"]]
+    assert len(notes) == 1 and "1 " in notes[0]["error"] and not notes[0]["incomplete"]
+
+
+def test_manifest_column_lineage_is_queryable(compiled_manifest, tmp_path):
+    (tmp_path / "target").mkdir()
+    (tmp_path / "target" / "manifest.json").write_text(json.dumps(compiled_manifest), encoding="utf-8")
+    for path in ("models/stg_orders.sql", "models/orders.sql", "models/legacy.sql"):
+        (tmp_path / path).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / path).write_text("select 1\n", encoding="utf-8")
+    (tmp_path / "models" / "sources.yml").write_text("version: 2\n", encoding="utf-8")
+    Orchestrator(scan_settings=ScanSettings(dbt_manifest="target/manifest.json")).run(str(tmp_path))
+    rows = QueryEngine.open(tmp_path).trace_data_lineage("model.shop.orders::rounded")["data"]["results"]
+    assert [row["node"] for row in rows] == ["model.shop.stg_orders::amount", "source.shop.raw.orders::amount"]
+    assert rows[0]["evidence"]["method"] == "dbt_manifest"
