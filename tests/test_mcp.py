@@ -66,11 +66,10 @@ def test_unusable_mcp_sdk_is_reported(monkeypatch, tmp_path, installed, expected
         mcp_server.create_server(tmp_path)
 
 
+@pytest.mark.skipif(importlib.util.find_spec("mcp") is None, reason="Optional mcp extra is not installed")
 def test_server_starts_before_analysis_and_picks_up_the_index(tmp_path):
     from mcp import ClientSession, StdioServerParameters
     from mcp.client.stdio import stdio_client
-    if importlib.util.find_spec("mcp") is None:
-        pytest.skip("Optional mcp extra is not installed")
     (tmp_path / "source.py").write_text("def run():\n    return 1\n")
 
     async def check():
