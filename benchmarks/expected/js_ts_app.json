@@ -1,17 +1,47 @@
 {
-  "description": "JavaScript/TypeScript app: ESM imports and re-exports, type-only exports, TypeScript ESM '.js' specifiers for '.ts' sources, directory index files, JSX/TSX, literal import() and require(), plus package and computed specifiers that must not become edges.",
+  "description": "JavaScript/TypeScript app: ESM imports and re-exports, type-only exports, tsconfig path aliases, TypeScript ESM '.js' specifiers for '.ts' sources, directory index files, JSX/TSX, literal import() and require(), plus package and computed specifiers that must not become edges.",
   "status": "complete",
   "imports": [
-    ["src/index.ts", "src/server.ts"],
-    ["src/index.ts", "src/config.ts"],
-    ["src/server.ts", "src/config.ts"],
-    ["src/server.ts", "src/utils/log.ts"],
-    ["src/utils/index.ts", "src/utils/log.ts"],
-    ["src/components/Button.tsx", "src/utils/index.ts"],
-    ["src/components/App.jsx", "src/components/Button.tsx"],
-    ["src/components/App.jsx", "src/components/Lazy.jsx"],
-    ["scripts/build.cjs", "src/index.ts"],
-    ["scripts/check.mjs", "src/utils/log.ts"]
+    [
+      "src/index.ts",
+      "src/server.ts"
+    ],
+    [
+      "src/index.ts",
+      "src/config.ts"
+    ],
+    [
+      "src/server.ts",
+      "src/config.ts"
+    ],
+    [
+      "src/server.ts",
+      "src/utils/log.ts"
+    ],
+    [
+      "src/utils/index.ts",
+      "src/utils/log.ts"
+    ],
+    [
+      "src/components/Button.tsx",
+      "src/utils/index.ts"
+    ],
+    [
+      "src/components/App.jsx",
+      "src/components/Button.tsx"
+    ],
+    [
+      "src/components/App.jsx",
+      "src/components/Lazy.jsx"
+    ],
+    [
+      "scripts/build.cjs",
+      "src/index.ts"
+    ],
+    [
+      "scripts/check.mjs",
+      "src/utils/log.ts"
+    ]
   ],
   "functions": [
     "src/server.ts::createServer",
@@ -23,10 +53,5 @@
     "src/components/App.jsx::App",
     "src/components/App.jsx::lazy",
     "src/components/Lazy.jsx::Lazy"
-  ],
-  "known_gaps": {
-    "imports": [
-      {"edge": ["src/server.ts", "src/utils/log.ts"], "reason": "tsconfig path aliases ('@/utils/log') are not resolved."}
-    ]
-  }
+  ]
 }

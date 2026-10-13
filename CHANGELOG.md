@@ -7,6 +7,14 @@ versions may contain breaking changes.
 
 ## [Unreleased]
 
+### Added
+
+- tsconfig/jsconfig path aliases for JavaScript/TypeScript imports: `paths`
+  wildcards and exact patterns, `baseUrl`, and `extends` chains within the
+  repository, using the nearest config above each importer. Config files are
+  parsed as JSON with comments and trailing commas, are part of the scanned
+  inventory, and invalidate the cache when edited.
+
 ### Fixed
 
 - MCP tool errors reached assistants only as "Error executing tool <name>"

@@ -24,7 +24,7 @@ from brownfield_cartographer.analyzers.tree_sitter_analyzer import (
 )
 from brownfield_cartographer.graph.knowledge_graph import KnowledgeGraph
 from brownfield_cartographer.models.schemas import Language, ModuleNode
-from brownfield_cartographer.scanner import ScanResult, scan_repository
+from brownfield_cartographer.scanner import ScanResult, is_js_config, scan_repository
 
 logger = logging.getLogger(__name__)
 
@@ -114,6 +114,7 @@ def extract_git_velocity(
 
 def _detect_dead_code(
     modules: dict[str, ModuleNode],
+    aliases: list[javascript_analyzer.AliasScope] | None = None,
 ) -> set[str]:
     """
     Identify modules whose exported symbols are never imported by anyone.
@@ -127,7 +128,7 @@ def _detect_dead_code(
     js_imported: set[str] = set()
     for module in modules.values():
         if module.language in {Language.JAVASCRIPT, Language.TYPESCRIPT}:
-            js_imported.update(javascript_analyzer.resolve(imp, module.path, set(modules)) or ""
+            js_imported.update(javascript_analyzer.resolve(imp, module.path, set(modules), aliases) or ""
                                for imp in module.imports)
             continue
         for imp in module.imports:
@@ -224,6 +225,14 @@ class Surveyor:
         logger.info("Surveyor: scanning %s", repo_root)
         logger.info("Found %d source files", len(source_files))
 
+        configs = {}
+        for config in (f for f in source_files if is_js_config(f.name)):
+            try:
+                configs[config.relative_to(repo_root).as_posix()] = config.read_text(encoding="utf-8")
+            except (OSError, UnicodeDecodeError):
+                continue
+        aliases = javascript_analyzer.load_alias_scopes(configs)
+
         # Full run: parse all files
         modules: dict[str, ModuleNode] = {}
         diagnostics = []
@@ -244,7 +253,7 @@ class Surveyor:
             if path in modules:
                 modules[path].change_velocity_30d = commits
 
-        dead_code = _detect_dead_code(modules)
+        dead_code = _detect_dead_code(modules, aliases)
         for path in dead_code:
             if path in modules:
                 modules[path].is_dead_code_candidate = True
@@ -255,7 +264,7 @@ class Surveyor:
         all_module_paths = set(modules.keys())
         for module in modules.values():
             for imp in module.imports:
-                target = _resolve_import(imp, all_module_paths, module.path)
+                target = _resolve_import(imp, all_module_paths, module.path, aliases)
                 if target and target != module.path:
                     locations = module.import_locations.get(imp, [])
                     knowledge_graph.add_import_edge(module.path, target, line_range=locations[0] if locations else None)
@@ -389,15 +398,16 @@ class Surveyor:
         return summary
 
 
-def _resolve_import(import_name: str, known_paths: set[str], importer: str = "") -> str | None:
+def _resolve_import(import_name: str, known_paths: set[str], importer: str = "",
+                    aliases: list[javascript_analyzer.AliasScope] | None = None) -> str | None:
     """
     Attempt to resolve a Python import name to a known module file path.
 
     Handles dotted imports by converting them to path separators. JavaScript
-    and TypeScript importers use relative-specifier resolution instead.
+    and TypeScript importers use relative and tsconfig/jsconfig alias resolution.
     """
     if importer.endswith(javascript_analyzer.EXTENSIONS):
-        return javascript_analyzer.resolve(import_name, importer, known_paths)
+        return javascript_analyzer.resolve(import_name, importer, known_paths, aliases)
     if import_name.startswith("."):
         level = len(import_name) - len(import_name.lstrip("."))
         parts = importer.replace("\\", "/").split("/")[:-1]
