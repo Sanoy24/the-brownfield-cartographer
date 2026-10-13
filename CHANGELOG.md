@@ -7,6 +7,13 @@ versions may contain breaking changes.
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-10-13
+
+Adds column-level lineage, Airflow task modeling and per-file SQL dialect
+selection, finds dbt projects anywhere in a repository, and removes internal
+transformation nodes from query results. Validated on four public data
+repositories at pinned commits.
+
 ### Added
 
 - Column-level lineage. Columns are `dataset::column` nodes linked by
@@ -187,7 +194,8 @@ First release published to PyPI as `brownfield-cartographer`.
 - Distinct transformation IDs and statement-specific SQL sources and targets.
 - Failed or partial runs no longer advance the successful checkpoint.
 
-[Unreleased]: https://github.com/Sanoy24/the-brownfield-cartographer/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/Sanoy24/the-brownfield-cartographer/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/Sanoy24/the-brownfield-cartographer/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/Sanoy24/the-brownfield-cartographer/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/Sanoy24/the-brownfield-cartographer/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/Sanoy24/the-brownfield-cartographer/releases/tag/v0.3.0
