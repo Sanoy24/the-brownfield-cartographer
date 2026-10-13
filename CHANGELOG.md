@@ -7,6 +7,14 @@ versions may contain breaking changes.
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-10-13
+
+Fixes MCP error messages that SDK 2.x had hidden from assistants, adds column
+lineage from compiled dbt manifests, follows Airflow task order in
+`trace_dependencies`, and closes the documented extraction gaps (tsconfig
+aliases, imported SQL constants, values-only f-strings, nested `@task`
+functions). Verified in a live Claude Code session.
+
 ### Added
 
 - tsconfig/jsconfig path aliases for JavaScript/TypeScript imports: `paths`
@@ -234,7 +242,8 @@ First release published to PyPI as `brownfield-cartographer`.
 - Distinct transformation IDs and statement-specific SQL sources and targets.
 - Failed or partial runs no longer advance the successful checkpoint.
 
-[Unreleased]: https://github.com/Sanoy24/the-brownfield-cartographer/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/Sanoy24/the-brownfield-cartographer/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/Sanoy24/the-brownfield-cartographer/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/Sanoy24/the-brownfield-cartographer/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/Sanoy24/the-brownfield-cartographer/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/Sanoy24/the-brownfield-cartographer/compare/v0.3.0...v0.4.0
