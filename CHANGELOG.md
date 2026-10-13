@@ -9,6 +9,18 @@ versions may contain breaking changes.
 
 ### Added
 
+- Airflow DAG structure. Tasks are graph nodes (`task:<file>::<dag>.<task>`),
+  not datasets, defined from operators and `@task` functions in `with DAG`,
+  `@dag` and `dag=` DAGs. `SCHEDULES` edges record order from `>>`/`<<`, lists,
+  `set_downstream`/`set_upstream`, `chain()`, `cross_downstream()` and TaskFlow
+  data passing, each with its own line. `RUNS` edges link a task to its
+  `python_callable`, `@task` function, `sql=` file or inline SQL lineage, and
+  `python x.py` bash commands. Impact flows from changed code through the tasks
+  that run it to downstream tasks; `find_symbol` returns tasks; the
+  architecture overview counts them. DAG files are detected by importing
+  `airflow`, anywhere in the repository.
+- `airflow_dags` benchmark corpus with `tasks`, `schedules` and `runs` facts.
+
 - SQL dialect selection. Each SQL file or embedded SQL string is parsed with
   the candidate dialect that yields the fewest invalid or unsupported
   statements (DuckDB, BigQuery, Snowflake, Postgres, MySQL, Spark, T-SQL,
@@ -27,6 +39,11 @@ versions may contain breaking changes.
   write to a dataset named after the file. A file that is a single query still
   defines a dataset named after the file, now labeled `confidence: inferred`
   with method `sql:<dialect>+file_name`.
+
+### Removed
+
+- The regex Airflow parser, which stored task order as datasets with
+  whole-file evidence and only read files under `dags/`.
 
 ### Fixed
 

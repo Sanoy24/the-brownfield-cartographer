@@ -122,9 +122,9 @@ locations and server status controls.
 | Tool | Input | Result |
 | --- | --- | --- |
 | `get_architecture` | Optional result limit | Counts, module hubs, sources/sinks, coverage |
-| `find_symbol` | Literal search pattern | Matching modules/functions with available source locations |
+| `find_symbol` | Literal search pattern | Matching modules, functions and Airflow tasks with available source locations |
 | `trace_dependencies` | Qualified target, direction | Imports/calls toward dependencies or reverse dependents |
-| `analyze_impact` | Qualified target | Potential affected consumers; no guarantee of runtime failure |
+| `analyze_impact` | Qualified target | Potential affected consumers, including Airflow tasks that run changed code and their downstream tasks; no guarantee of runtime failure |
 | `trace_data_lineage` | Dataset, upstream/downstream | Supported producers or consumers |
 | `get_code_context` | Relative path, line range | Snapshot-checked source excerpt inside the repository |
 

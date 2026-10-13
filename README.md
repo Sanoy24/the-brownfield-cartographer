@@ -130,7 +130,7 @@ unchanged successful snapshots can reuse the complete index.
 | Python | Functions/classes, supported absolute/relative imports; conservative literal I/O associations (pandas, Spark readers and writers). SQL passed to `execute`/`executemany`/`executescript`, `.sql()` and `read_sql` is parsed from literals and same-module constants, including `text()` and DB-API placeholders. Dynamic SQL is reported, not guessed; constants imported from other modules are not resolved |
 | SQL | SELECT/UNION, CTAS, INSERT, UPDATE, DELETE and MERGE; statement spans and table dependencies. DDL and transaction statements without table lineage are skipped; other statements, such as COPY, are reported individually without dropping the rest of the file. Each file is parsed with the best-fitting dialect (DuckDB, BigQuery, Snowflake, Postgres, MySQL, Spark, T-SQL, Trino), recorded as `sql:<dialect>` in evidence; `--dialect` pins one |
 | dbt | Explicit manifest v12 ingestion for models, seeds, snapshots and sources; basic SQL/YAML fallback without a manifest. Projects are found anywhere in the repository, including several per repository |
-| Airflow | Experimental, limited task dependency regex |
+| Airflow | Tasks from operators and `@task` functions in `with DAG`, `@dag` and `dag=` DAGs; order from `>>`/`<<`, lists, `set_downstream`, `chain()` and TaskFlow data passing, with line evidence. Tasks link to what they run: `python_callable`, `@task` functions, `sql=` files (including `template_searchpath`) and inline SQL lineage, and `python x.py` bash commands. Impact flows from code through tasks to downstream tasks. Tasks created in loops or with computed ids are reported, not guessed |
 | JavaScript/TypeScript | `.js .mjs .cjs .jsx .ts .mts .cts .tsx`: functions, arrow functions, class methods; ESM, type-only, `require()` and `import()` imports with literal relative specifiers. Package imports are external; tsconfig path aliases are not resolved |
 
 The shared scanner respects nested `.gitignore` and `.cartographerignore`, prunes
@@ -153,7 +153,7 @@ known gaps. It runs in CI.
 uv sync --frozen
 uv run --no-sync pytest -q
 uv run --no-sync ruff check src tests scripts
-uv run --no-sync mypy -p brownfield_cartographer.scanner -p brownfield_cartographer.persistence -p brownfield_cartographer.query_api -p brownfield_cartographer.analyzers.javascript_analyzer -p brownfield_cartographer.analyzers.embedded_sql -p brownfield_cartographer.analyzers.sql_lineage --follow-imports=skip
+uv run --no-sync mypy -p brownfield_cartographer.scanner -p brownfield_cartographer.persistence -p brownfield_cartographer.query_api -p brownfield_cartographer.analyzers.javascript_analyzer -p brownfield_cartographer.analyzers.embedded_sql -p brownfield_cartographer.analyzers.sql_lineage -p brownfield_cartographer.analyzers.airflow_dag --follow-imports=skip
 uv build
 uv run --no-sync python scripts/check_wheel.py
 ```
