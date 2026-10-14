@@ -29,6 +29,47 @@ One query engine serves the CLI, a Python API, and a read-only MCP server for
 Claude Code, Codex and Cursor. The support table below lists current
 capabilities and known gaps.
 
+## Try it in 60 seconds
+
+With [uv](https://docs.astral.sh/uv/) installed, run it on dbt's public example
+project. Nothing is installed permanently, and analysis took 3 seconds here:
+
+```sh
+git clone --depth 1 https://github.com/dbt-labs/jaffle_shop && cd jaffle_shop
+uvx --from brownfield-cartographer cartographer analyze .
+uvx --from brownfield-cartographer cartographer impact models/staging/stg_payments.sql
+```
+
+```text
+analyze_impact | complete | snapshot eefa28cd4e13
+┌───────────────┬──────────────┬──────────────────────────────────────┐
+│ Symbol / node │ Relationship │ Evidence                             │
+├───────────────┼──────────────┼──────────────────────────────────────┤
+│ stg_payments  │ PRODUCES     │ models/staging/stg_payments.sql:1-26 │
+│ orders        │ PRODUCES     │ models/orders.sql:1-57               │
+│ customers     │ PRODUCES     │ models/customers.sql:1-70            │
+└───────────────┴──────────────┴──────────────────────────────────────┘
+```
+
+Column lineage follows renames through each model:
+
+```sh
+uvx --from brownfield-cartographer cartographer lineage customers::number_of_orders
+```
+
+```text
+trace_data_lineage | complete | snapshot eefa28cd4e13
+┌──────────────────────┬──────────────┬────────────────────────────────────┐
+│ Symbol / node        │ Relationship │ Evidence                           │
+├──────────────────────┼──────────────┼────────────────────────────────────┤
+│ stg_orders::order_id │ DERIVES      │ models/customers.sql:1-70          │
+│ raw_orders::id       │ DERIVES      │ models/staging/stg_orders.sql:1-24 │
+└──────────────────────┴──────────────┴────────────────────────────────────┘
+```
+
+In Claude Code, the [plugin](#connect-your-ai-assistant) lets you ask the same
+questions in plain language.
+
 ## Install and analyze
 
 Requires Python 3.12+ and Git. Install the command-line tools from PyPI with
