@@ -3,7 +3,7 @@
     "cartographer": {
       "command": "uvx",
       "args": [
-        "brownfield-cartographer@0.7.0",
+        "brownfield-cartographer@0.8.0",
         "--repo",
         "${CLAUDE_PROJECT_DIR}"
       ]
