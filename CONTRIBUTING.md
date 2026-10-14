@@ -47,7 +47,8 @@ review conversations, and squash merges, and blocks force pushes and deletion.
 
 1. In a pull request, set `version` in `pyproject.toml` and in
    `plugin/.claude-plugin/plugin.json`, update the pinned version in
-   `plugin/.mcp.json` (`tests/test_plugin.py` checks all three), run `uv lock`, and move
+   `plugin/.mcp.json` and both versions in `server.json` (`tests/test_plugin.py`
+   checks them all), run `uv lock`, and move
    the `Unreleased` changelog entries under a new `## [X.Y.Z] - YYYY-MM-DD`
    heading.
 2. After it merges, tag the merge commit and push the tag:

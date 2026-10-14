@@ -54,7 +54,7 @@ def test_read_only_stdio_tools(tmp_path):
 
 
 @pytest.mark.parametrize("installed,expected", [
-    (None, "Install the mcp extra"),
+    (None, "The mcp package is missing"),
     ("1.30.0", "mcp 1.30.0 is installed, but Cartographer requires mcp>=2.3,<3"),
 ])
 def test_unusable_mcp_sdk_is_reported(monkeypatch, tmp_path, installed, expected):

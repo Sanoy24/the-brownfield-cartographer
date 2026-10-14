@@ -54,6 +54,7 @@ name = "brownfield-cartographer"
 version = "0.7.0"
 source = { editable = "." }
 dependencies = [
+    { name = "mcp" },
     { name = "networkx" },
     { name = "numpy" },
     { name = "pathspec" },
@@ -69,11 +70,6 @@ dependencies = [
     { name = "typer" },
 ]
 
-[package.optional-dependencies]
-mcp = [
-    { name = "mcp" },
-]
-
 [package.dev-dependencies]
 dev = [
     { name = "mypy" },
@@ -83,7 +79,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "mcp", marker = "extra == 'mcp'", specifier = ">=2.3,<3" },
+    { name = "mcp", specifier = ">=2.3,<3" },
     { name = "networkx", specifier = ">=3.3" },
     { name = "numpy", specifier = ">=1.26" },
     { name = "pathspec", specifier = ">=0.12,<2" },

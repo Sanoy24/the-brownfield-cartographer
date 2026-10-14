@@ -7,7 +7,7 @@ explains them. Cartographer needs no model credential or running model service.
 Install the package with its MCP extra and index the target repository first:
 
 ```sh
-uv tool install "brownfield-cartographer[mcp]"
+uv tool install brownfield-cartographer
 cartographer analyze /absolute/path/to/target
 ```
 
@@ -20,7 +20,7 @@ host needs an absolute command path. For example, with Claude Code:
 claude mcp add --transport stdio --scope project brownfield -- cartographer-mcp --repo /absolute/path/to/target
 ```
 
-The remaining examples use a source checkout (`uv sync --frozen --extra mcp`).
+The remaining examples use a source checkout (`uv sync --frozen`).
 For host configurations, use the absolute Python interpreter in Cartographer's
 virtual environment (`/absolute/path/to/cartographer/.venv/bin/python` on Unix,
 `C:/path/to/cartographer/.venv/Scripts/python.exe` on Windows). Launch arguments
@@ -84,7 +84,7 @@ For a session-only check that leaves your global and project settings untouched,
 use the repository helper from the Cartographer checkout:
 
 ```sh
-uv sync --frozen --extra mcp
+uv sync --frozen
 uv run --no-sync cartographer analyze examples/sample_repo
 uv run --no-sync python scripts/check_codex_config.py --repo examples/sample_repo
 uv run --no-sync python scripts/check_codex_config.py --repo examples/sample_repo --launch

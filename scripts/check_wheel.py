@@ -2,7 +2,8 @@
 
 Run after `uv build`. No editable installation or source-tree imports are used.
 Use --offline to resolve dependencies only from the existing uv cache.
-Use --mcp to additionally install the MCP extra and check its stdio entry point.
+The MCP SDK is a core dependency, so the stdio server is always checked through
+both of its entry points; --mcp is accepted for compatibility.
 """
 from __future__ import annotations
 
@@ -31,8 +32,7 @@ package = Path(brownfield_cartographer.__file__).resolve().parent
 assert package.is_relative_to(Path(sys.prefix).resolve()), package
 assert (package / "py.typed").is_file()
 assert importlib.metadata.version("brownfield-cartographer") == sys.argv[1]
-for optional in ("mcp",):
-    assert importlib.util.find_spec(optional) is None, optional
+assert importlib.util.find_spec("mcp") is not None, "mcp must be installed with the core package"
 
 def deny_network(*args, **kwargs):
     raise AssertionError("Installed core attempted network access")
@@ -86,10 +86,9 @@ lineage = json.loads(command("lineage", "model.shop.orders", "--repo", str(dbt),
 assert "source.shop.raw.orders" in {row["node"] for row in lineage}
 assert all(row["evidence"]["method"] == "dbt_manifest" and not row["evidence"]["location_available"] for row in lineage)
 
-missing_extra = subprocess.run([str(mcp), "--repo", str(repo)], capture_output=True, text=True, encoding="utf-8", timeout=30)
-assert missing_extra.returncode == 1
-assert "Install the mcp extra" in missing_extra.stderr
-print("Installed wheel: core API, CLI, dbt adapter, entry points, typing metadata and optional dependency boundaries passed.")
+registry_entry = scripts / ("brownfield-cartographer.exe" if sys.platform == "win32" else "brownfield-cartographer")
+assert mcp.is_file() and registry_entry.is_file(), "MCP entry points are missing"
+print("Installed wheel: core API, CLI, dbt adapter, entry points and typing metadata passed.")
 '''
 
 
@@ -107,7 +106,8 @@ from brownfield_cartographer.query_api import QueryEngine
 
 repo = Path.cwd() / "fixture"
 engine = QueryEngine.open(repo)
-entry = Path(sys.executable).parent / ("cartographer-mcp.exe" if sys.platform == "win32" else "cartographer-mcp")
+# `brownfield-cartographer` is the name registry clients launch (`uvx brownfield-cartographer`).
+entry = Path(sys.executable).parent / ("brownfield-cartographer.exe" if sys.platform == "win32" else "brownfield-cartographer")
 requests = {
     "get_architecture": ({}, engine.get_architecture()),
     "find_symbol": ({"pattern": "run"}, engine.find_symbol("run")),
@@ -168,7 +168,7 @@ async def check():
     assert files() == before
 
 asyncio.run(asyncio.wait_for(check(), timeout=60))
-print("Installed MCP extra: six stdio tools match the API, reject invalid requests, refresh status and leave files unchanged.")
+print("Installed MCP server: six stdio tools match the API, reject invalid requests, refresh status and leave files unchanged.")
 '''
 
 
@@ -176,7 +176,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--wheel", type=Path, help="Wheel to install; defaults to the current project version in dist/")
     parser.add_argument("--offline", action="store_true", help="Use only cached dependencies")
-    parser.add_argument("--mcp", action="store_true", help="Also validate the installed MCP extra over stdio")
+    parser.add_argument("--mcp", action="store_true", help="Accepted for compatibility; the MCP server is always checked")
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
     project = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))["project"]
@@ -204,11 +204,8 @@ def main() -> None:
         probe = work / "probe.py"
         probe.write_text(PROBE, encoding="utf-8")
         run([str(python), "-I", "-X", "utf8", str(probe), project["version"]])
-        if args.mcp:
-            requirement = f"{project['name']}[mcp] @ {wheel.as_uri()}"
-            run([*uv, "pip", "install", "--strict", "--python", str(python), requirement])
-            probe.write_text(MCP_PROBE, encoding="utf-8")
-            run([str(python), "-I", "-X", "utf8", str(probe)])
+        probe.write_text(MCP_PROBE, encoding="utf-8")
+        run([str(python), "-I", "-X", "utf8", str(probe)])
 
 
 if __name__ == "__main__":

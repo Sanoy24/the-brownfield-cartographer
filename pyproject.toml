@@ -49,6 +49,8 @@ dependencies = [
     # Graph analysis (NetworkX PageRank backend)
     "numpy>=1.26",
     "scipy>=1.14",
+    # MCP stdio server for coding assistants
+    "mcp>=2.3,<3",
 ]
 
 [project.urls]
@@ -58,7 +60,8 @@ Issues = "https://github.com/Sanoy24/the-brownfield-cartographer/issues"
 Changelog = "https://github.com/Sanoy24/the-brownfield-cartographer/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
-mcp = ["mcp>=2.3,<3"]
+# Kept so existing `brownfield-cartographer[mcp]` installs still resolve; mcp is now a core dependency.
+mcp = []
 
 [dependency-groups]
 dev = ["pytest>=8,<10", "ruff>=0.11", "mypy>=1.15"]
@@ -77,6 +80,8 @@ ignore = ["E501", "B008", "UP042"]
 [project.scripts]
 cartographer = "brownfield_cartographer.cli:app"
 cartographer-mcp = "brownfield_cartographer.mcp_server:main"
+# Name used by MCP Registry clients: `uvx brownfield-cartographer --repo <path>`.
+brownfield-cartographer = "brownfield_cartographer.mcp_server:main"
 
 [build-system]
 requires = ["hatchling>=1.27"]
