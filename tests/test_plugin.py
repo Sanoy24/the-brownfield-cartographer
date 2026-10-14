@@ -15,8 +15,7 @@ def test_plugin_version_and_server_pin_match_the_package():
     assert _json("plugin/.claude-plugin/plugin.json")["version"] == version
     server = _json("plugin/.mcp.json")["mcpServers"]["cartographer"]
     assert server["command"] == "uvx"
-    assert server["args"] == ["--from", f"brownfield-cartographer[mcp]=={version}", "cartographer-mcp",
-                              "--repo", "${CLAUDE_PROJECT_DIR}"]
+    assert server["args"] == [f"brownfield-cartographer@{version}", "--repo", "${CLAUDE_PROJECT_DIR}"]
 
 
 def test_marketplace_lists_the_plugin_directory():
@@ -31,3 +30,14 @@ def test_skill_has_name_and_trigger_description():
     header = text.split("---")[1]
     assert "name: data-impact" in header
     assert "description:" in header and "impact" in header
+
+
+def test_registry_metadata_matches_the_package_and_readme():
+    version = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]["version"]
+    server = _json("server.json")
+    [package] = server["packages"]
+    assert server["version"] == package["version"] == version
+    assert package["identifier"] == "brownfield-cartographer" and package["registryType"] == "pypi"
+    assert len(server["description"]) <= 100  # registry limit
+    # PyPI ownership verification: the package README must name the server.
+    assert f"mcp-name: {server['name']}" in (ROOT / "README.md").read_text(encoding="utf-8")

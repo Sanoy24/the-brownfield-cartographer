@@ -41,7 +41,7 @@ def create_server(repo_root: Path, index_dir: Path | None = None):
     except ImportError as exc:
         installed = _installed_mcp_version()
         if installed is None:
-            raise RuntimeError('Install the mcp extra: pip install "brownfield-cartographer[mcp]"') from exc
+            raise RuntimeError('The mcp package is missing; reinstall: pip install --force-reinstall brownfield-cartographer') from exc
         raise RuntimeError(f'mcp {installed} is installed, but Cartographer requires {SUPPORTED_MCP}; '
                            f'install a supported version: pip install "{SUPPORTED_MCP}"') from exc
     # Starts before analysis; tools explain how to create the index until it exists.
