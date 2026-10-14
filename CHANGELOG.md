@@ -9,6 +9,11 @@ versions may contain breaking changes.
 
 ### Added
 
+- Official MCP Registry listing as `io.github.Sanoy24/brownfield-cartographer`
+  (`server.json`), published by the release workflow through GitHub OIDC.
+- `brownfield-cartographer` console script, the MCP server entry point that
+  registry clients launch (`uvx brownfield-cartographer --repo <path>`).
+
 - Claude Code plugin and marketplace in this repository
   (`/plugin marketplace add Sanoy24/the-brownfield-cartographer`). It bundles
   the MCP server, run through `uvx` for the current project, and a
@@ -16,6 +21,8 @@ versions may contain breaking changes.
 
 ### Changed
 
+- The MCP SDK is a core dependency (about 35 MB), so every install includes
+  the server. The `[mcp]` extra remains as an empty alias for compatibility.
 - The MCP server starts before a repository is analyzed. Tools return the exact
   `cartographer analyze` command (including a `uvx` form) until an index
   exists, then use it without a restart. Server instructions tell assistants to

@@ -1,5 +1,7 @@
 # Brownfield Cartographer
 
+<!-- mcp-name: io.github.Sanoy24/brownfield-cartographer -->
+
 [![CI](https://github.com/Sanoy24/the-brownfield-cartographer/actions/workflows/ci.yml/badge.svg)](https://github.com/Sanoy24/the-brownfield-cartographer/actions/workflows/ci.yml)
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 ![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue.svg)
@@ -33,8 +35,8 @@ Requires Python 3.12+ and Git. Install the command-line tools from PyPI with
 [uv](https://docs.astral.sh/uv/) or [pipx](https://pipx.pypa.io/):
 
 ```sh
-uv tool install "brownfield-cartographer[mcp]"
-# or: pipx install "brownfield-cartographer[mcp]"
+uv tool install brownfield-cartographer
+# or: pipx install brownfield-cartographer
 cartographer --version
 
 # Local analysis needs no network, API key, or model service.
@@ -50,7 +52,7 @@ cartographer analyze /path/to/repository --dialect bigquery
 cartographer analyze /path/to/dbt-project --dbt-manifest target/manifest.json
 ```
 
-Omit `[mcp]` if you only need the CLI. To run from a source checkout instead,
+To run from a source checkout instead,
 clone the repository, run `uv sync --frozen`, and prefix commands with `uv run`,
 as in the examples below.
 
