@@ -1,0 +1,54 @@
+name: How did it do on your repository?
+description: Share results from running Cartographer on a real project, good or bad
+labels: [field-report]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for trying Cartographer. Reports from real repositories decide what gets built next.
+        Do not paste proprietary code or table names you cannot share; describe the pattern instead.
+  - type: dropdown
+    id: stack
+    attributes:
+      label: What does the repository contain?
+      multiple: true
+      options: [dbt, Plain SQL files, SQL inside Python, Airflow, Spark, JavaScript/TypeScript, Other]
+    validations:
+      required: true
+  - type: input
+    id: size
+    attributes:
+      label: Rough size
+      placeholder: e.g. 300 dbt models, 50 DAGs; analysis took 20 seconds
+  - type: dropdown
+    id: interface
+    attributes:
+      label: How did you use it?
+      multiple: true
+      options: [CLI, Claude Code plugin, Other MCP host, Python API]
+    validations:
+      required: true
+  - type: textarea
+    id: worked
+    attributes:
+      label: What gave a correct, useful answer?
+    validations:
+      required: true
+  - type: textarea
+    id: wrong
+    attributes:
+      label: What was wrong, missing or confusing?
+      description: For a wrong or missing dependency, say what the code does and what Cartographer reported.
+  - type: textarea
+    id: status
+    attributes:
+      label: Status and diagnostics
+      description: Optional. `status` from `analysis_summary.json` and the most common diagnostic messages.
+      render: text
+  - type: dropdown
+    id: again
+    attributes:
+      label: Would you use it again on this repository?
+      options: ["Yes", "Maybe, if the problems above were fixed", "No"]
+    validations:
+      required: true
