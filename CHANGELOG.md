@@ -7,6 +7,13 @@ versions may contain breaking changes.
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-10-14
+
+Makes Cartographer installable as a Claude Code plugin and lists it in the
+official MCP Registry. The MCP server now ships in the core install, starts
+before a repository is analyzed, and tells the assistant how to build the
+index.
+
 ### Added
 
 - Official MCP Registry listing as `io.github.Sanoy24/brownfield-cartographer`
@@ -264,7 +271,8 @@ First release published to PyPI as `brownfield-cartographer`.
 - Distinct transformation IDs and statement-specific SQL sources and targets.
 - Failed or partial runs no longer advance the successful checkpoint.
 
-[Unreleased]: https://github.com/Sanoy24/the-brownfield-cartographer/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/Sanoy24/the-brownfield-cartographer/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/Sanoy24/the-brownfield-cartographer/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/Sanoy24/the-brownfield-cartographer/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/Sanoy24/the-brownfield-cartographer/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/Sanoy24/the-brownfield-cartographer/compare/v0.4.0...v0.5.0
