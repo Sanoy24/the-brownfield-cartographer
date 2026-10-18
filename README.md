@@ -146,6 +146,42 @@ Use `--index-dir` for a custom output location. Python callers use
 query methods. Responses carry snapshot identity, coverage, capped-output
 markers, and available source evidence. Ambiguous targets are rejected.
 
+## Review pull requests
+
+`cartographer diff` reports what a branch changes and what that can affect,
+for a PR comment or a quick check before pushing:
+
+```sh
+cartographer diff --base main          # Markdown
+cartographer diff --base main --json   # for scripts
+```
+
+Changed lines since the merge base with `--base` (committed, uncommitted and
+untracked) are mapped to functions, modules, SQL statements, dbt models, schema
+YAML and Airflow tasks, and their downstream dependents are listed with
+evidence. Deleted files are reported, but dependents of what they defined are
+not traced yet.
+
+To comment on every pull request, add a workflow:
+
+```yaml
+on: pull_request
+permissions:
+  contents: read
+  pull-requests: write
+jobs:
+  impact:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0   # the merge base must be available
+      - uses: Sanoy24/the-brownfield-cartographer@v0.9.0
+```
+
+The action keeps one comment up to date and also writes the report to the job
+summary, which still works for pull requests from forks.
+
 ## Connect your AI assistant
 
 **Claude Code plugin** (needs [uv](https://docs.astral.sh/uv/); nothing else to
@@ -214,7 +250,7 @@ known gaps. It runs in CI.
 uv sync --frozen
 uv run --no-sync pytest -q
 uv run --no-sync ruff check src tests scripts
-uv run --no-sync mypy -p brownfield_cartographer.scanner -p brownfield_cartographer.persistence -p brownfield_cartographer.query_api -p brownfield_cartographer.analyzers.javascript_analyzer -p brownfield_cartographer.analyzers.embedded_sql -p brownfield_cartographer.analyzers.sql_lineage -p brownfield_cartographer.analyzers.airflow_dag -p brownfield_cartographer.analyzers.dbt_manifest --follow-imports=skip
+uv run --no-sync mypy -p brownfield_cartographer.scanner -p brownfield_cartographer.persistence -p brownfield_cartographer.query_api -p brownfield_cartographer.analyzers.javascript_analyzer -p brownfield_cartographer.analyzers.embedded_sql -p brownfield_cartographer.analyzers.sql_lineage -p brownfield_cartographer.analyzers.airflow_dag -p brownfield_cartographer.analyzers.dbt_manifest -p brownfield_cartographer.diff --follow-imports=skip
 uv build
 uv run --no-sync python scripts/check_wheel.py
 ```
