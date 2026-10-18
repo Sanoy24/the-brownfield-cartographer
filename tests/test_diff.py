@@ -121,3 +121,20 @@ def test_schema_yaml_change_reports_configured_model_but_not_its_downstream(tmp_
     assert [c["node"] for c in report["changed"]] == ["models/schema.yml"]
     assert [a["node"] for a in report["affected"]] == ["stg_orders"]
     assert report["unmapped_files"] == ["package-lock.yml"]
+
+
+def test_deleted_module_reports_importers_that_still_use_it(repo):
+    (repo / "lib/util.py").unlink()
+    report = change_impact(repo, "main")
+    removed = {c["node"] for c in report["changed"] if c["removed"]}
+    assert {"lib/util.py", "lib/util.py::helper"} <= removed
+    # The import no longer resolves in the current graph; it is found in the merge base.
+    assert [(a["node"], a["edge_type"]) for a in report["affected"]] == [("app.py", "IMPORTS")]
+
+
+def test_deleted_sql_file_reports_consumers_of_the_tables_it_wrote(repo):
+    (repo / "sql/stage.sql").unlink()
+    report = change_impact(repo, "main")
+    assert report["deleted_files"] == ["sql/stage.sql"]
+    assert {"s.orders", "s.customers"} <= {c["node"] for c in report["changed"]}
+    assert "m.revenue" in {a["node"] for a in report["affected"]}

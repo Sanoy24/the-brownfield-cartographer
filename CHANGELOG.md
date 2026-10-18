@@ -15,6 +15,8 @@ versions may contain breaking changes.
   can affect downstream with evidence. Markdown for pull-request comments, or
   `--json`. Configured models are listed without following their downstream,
   since tests, docs and metrics do not change the data consumers read.
+  The merge base is analyzed as well, so deleted modules, functions and models
+  report the dependents that still use them.
 - A GitHub Action (`uses: Sanoy24/the-brownfield-cartographer@<tag>`) that
   posts the report as one pull-request comment, updated on each push.
 
