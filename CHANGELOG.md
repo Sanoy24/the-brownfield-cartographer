@@ -19,6 +19,12 @@ versions may contain breaking changes.
   report the dependents that still use them.
 - A GitHub Action (`uses: Sanoy24/the-brownfield-cartographer@<tag>`) that
   posts the report as one pull-request comment, updated on each push.
+- Python call edges between repository functions, with call-site evidence:
+  same-module functions, imported names and modules (including aliases and
+  imports under `try`/`if`), and `self`/`cls` methods. Impact and
+  `cartographer diff` now report the functions that call a changed or removed
+  function. The benchmark scores calls; on 40 sampled edges from `requests` and
+  `click`, all were correct.
 
 ## [0.8.0] - 2026-10-14
 

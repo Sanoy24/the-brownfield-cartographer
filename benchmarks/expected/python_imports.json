@@ -23,5 +23,14 @@
     "pkg/util.py::double",
     "traps.py::load"
   ],
-  "ignore_functions": ["pkg/core.py::traced.wrapper", "pkg/core.py::wrapper"]
+  "ignore_functions": ["pkg/core.py::traced.wrapper", "pkg/core.py::wrapper"],
+  "calls": [
+    ["app.py::main", "pkg/util.py::double"],
+    ["conditional.py::make", "pkg/aliased.py::build"],
+    ["pkg/core.py::Engine.run", "pkg/core.py::decorated"],
+    ["pkg/core.py::decorated", "pkg/core.py::helper"],
+    ["pkg/sub/deep.py::combined", "pkg/core.py::helper"],
+    ["pkg/sub/deep.py::combined", "pkg/util.py::double"],
+    ["pkg/util.py::double", "pkg/core.py::helper"]
+  ]
 }

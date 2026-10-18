@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any
 
 from brownfield_cartographer.analyzers import javascript_analyzer
+from brownfield_cartographer.analyzers.python_calls import extract_calls
 from brownfield_cartographer.analyzers.tree_sitter_analyzer import (
     analyze_module,
     extract_functions_from_file,
@@ -275,6 +276,7 @@ class Surveyor:
             functions = extract_functions_from_file(file_path, repo_root)
             for fn in functions:
                 knowledge_graph.add_function_node(fn)
+        _add_call_edges(knowledge_graph, path_map, set(modules), diagnostics)
 
         summary = self._build_summary(
             knowledge_graph, source_files, modules, dead_code, velocity
@@ -350,6 +352,10 @@ class Surveyor:
             functions = extract_functions_from_file(file_path, repo_root)
             for fn in functions:
                 knowledge_graph.add_function_node(fn)
+        knowledge_graph.graph.remove_edges_from([
+            (u, v) for u, v, d in knowledge_graph.graph.edges(data=True) if d.get("edge_type") == "CALLS"
+        ])
+        _add_call_edges(knowledge_graph, path_map, set(knowledge_graph._module_nodes), [])
 
         modules = dict(knowledge_graph._module_nodes)
         return self._build_summary(
@@ -396,6 +402,32 @@ class Surveyor:
             json.dumps(summary, indent=2) if len(str(summary)) < 2000 else f"{len(modules)} modules analyzed",
         )
         return summary
+
+
+def _add_call_edges(knowledge_graph: KnowledgeGraph, path_map: dict[str, Path],
+                    module_paths: set[str], diagnostics: list[dict]) -> None:
+    """Link Python functions to the repository functions they call."""
+    graph = knowledge_graph.graph
+    for rel_path in sorted(p for p in module_paths if p.endswith(".py") and p in path_map):
+        try:
+            calls = extract_calls(path_map[rel_path].read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, SyntaxError, ValueError, RecursionError) as exc:
+            diagnostics.append({"path": rel_path, "error": f"Call extraction failed: {exc}", "incomplete": True})
+            continue
+        for caller, module, name, line in calls:
+            source = f"{rel_path}::{caller}"
+            candidates = [f"{rel_path}::{name}"] if not module else []
+            if module:
+                target = _resolve_import(module, module_paths, rel_path)
+                candidates.append(f"{target}::{name}" if target else "")
+                # `from lib import Job; Job.create()`: the last component may be a class.
+                head, _, cls = module.rpartition(".")
+                if head.strip(".") and cls and (owner := _resolve_import(head, module_paths, rel_path)):
+                    candidates.append(f"{owner}::{cls}.{name}")
+            callee = next((c for c in candidates if c and graph.has_node(c)
+                           and graph.nodes[c].get("node_type") == "function"), None)
+            if callee and callee != source and graph.has_node(source):
+                knowledge_graph.add_calls_edge(source, callee, rel_path, line)
 
 
 def _resolve_import(import_name: str, known_paths: set[str], importer: str = "",

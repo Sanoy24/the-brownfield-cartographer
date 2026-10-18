@@ -89,5 +89,10 @@
       "marts.customers",
       "marts.orders"
     ]
+  ],
+  "calls": [
+    ["dags/reports.py::reports", "dags/reports.py::reports.collect"],
+    ["dags/reports.py::reports", "dags/reports.py::reports.deliver"],
+    ["dags/reports.py::reports", "dags/reports.py::reports.render"]
   ]
 }

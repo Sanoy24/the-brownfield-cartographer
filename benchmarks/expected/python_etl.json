@@ -34,5 +34,6 @@
       "staging.events",
       "marts.daily"
     ]
-  ]
+  ],
+  "calls": []
 }
