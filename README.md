@@ -159,8 +159,8 @@ cartographer diff --base main --json   # for scripts
 Changed lines since the merge base with `--base` (committed, uncommitted and
 untracked) are mapped to functions, modules, SQL statements, dbt models, schema
 YAML and Airflow tasks, and their downstream dependents are listed with
-evidence. Deleted files are reported, but dependents of what they defined are
-not traced yet.
+evidence. The merge base is analyzed too, so removed code counts: deleting a
+module, function or model reports the importers and models that still use it.
 
 To comment on every pull request, add a workflow:
 

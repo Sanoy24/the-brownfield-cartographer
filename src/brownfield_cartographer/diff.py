@@ -4,6 +4,7 @@ from __future__ import annotations
 import re
 import subprocess
 import sys
+import tempfile
 from collections import deque
 from contextlib import redirect_stdout
 from pathlib import Path
@@ -13,7 +14,7 @@ from brownfield_cartographer.orchestrator import Orchestrator
 from brownfield_cartographer.query_api import QueryEngine, QueryError
 from brownfield_cartographer.scanner import ScanSettings
 
-_HUNK = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@")
+_HUNK = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@")
 # Modules whose own identity matters to importers. SQL files are represented by
 # the datasets their statements produce; YAML files by the models they configure.
 _CODE_LANGUAGES = {"python", "javascript", "typescript"}
@@ -30,11 +31,16 @@ def _git(repo: Path, *args: str) -> str:
     return result.stdout
 
 
-def changed_lines(repo: Path, base: str) -> tuple[str, dict[str, list[tuple[int, int]]], list[str]]:
+Ranges = dict[str, list[tuple[int, int]]]
+
+
+def changed_lines(repo: Path, base: str) -> tuple[str, Ranges, Ranges, list[str]]:
     """Changes since the merge base with `base`, including uncommitted and untracked files.
 
-    Returns the merge base, changed line ranges per file (in the current version)
-    and deleted files. A pure deletion marks the lines on both sides of it.
+    Returns the merge base, changed line ranges per file in the current version
+    and in the merge base, and deleted files. In the current version a pure
+    deletion marks the lines on both sides of it; in the merge base a pure
+    insertion removes nothing and is not marked.
     """
     merge_base = _git(repo, "merge-base", base, "HEAD").strip()
     deleted = []
@@ -42,19 +48,26 @@ def changed_lines(repo: Path, base: str) -> tuple[str, dict[str, list[tuple[int,
     for status, path in zip(fields[::2], fields[1::2], strict=False):
         if status == "D":
             deleted.append(path)
-    ranges: dict[str, list[tuple[int, int]]] = {}
-    current = None
+    ranges: Ranges = {}
+    old_ranges: Ranges = {}
+    current = old = None
     for line in _git(repo, "diff", "-U0", "--no-renames", "--relative", "--no-ext-diff", merge_base).splitlines():
-        if line.startswith("+++ "):
+        if line.startswith("--- "):
+            old = line[6:] if line.startswith("--- a/") else None
+        elif line.startswith("+++ "):
             current = line[6:] if line.startswith("+++ b/") else None
-        elif current and (match := _HUNK.match(line)):
-            start, count = int(match[1]), int(match[2] if match[2] is not None else 1)
-            span = (start, start + count - 1) if count else (max(start, 1), start + 1)
-            ranges.setdefault(current, []).append(span)
+        elif match := _HUNK.match(line):
+            old_start, old_count = int(match[1]), int(match[2] if match[2] is not None else 1)
+            start, count = int(match[3]), int(match[4] if match[4] is not None else 1)
+            if current:
+                span = (start, start + count - 1) if count else (max(start, 1), start + 1)
+                ranges.setdefault(current, []).append(span)
+            if old and old_count:
+                old_ranges.setdefault(old, []).append((old_start, old_start + old_count - 1))
     for path in _git(repo, "ls-files", "--others", "--exclude-standard").splitlines():
         if not path.startswith(".cartography/"):
             ranges[path] = [(1, 10**9)]
-    return merge_base, ranges, sorted(deleted)
+    return merge_base, ranges, old_ranges, sorted(deleted)
 
 
 def _span(attrs: dict) -> tuple[int, int] | None:
@@ -89,10 +102,12 @@ def _changed_nodes(engine: QueryEngine, ranges: dict[str, list[tuple[int, int]]]
     return changed
 
 
-def _affected(engine: QueryEngine, changed: dict[str, str], depth: int, limit: int) -> tuple[list[dict], str | None]:
+def _affected(engine: QueryEngine, changed: dict[str, str], depth: int, limit: int,
+              report=lambda node: True, skip: set[str] | frozenset[str] = frozenset()) -> tuple[list[dict], str | None]:
+    """Dependents of the changed nodes; only nodes passing `report` are listed, but all are traversed."""
     graph = engine.graph.graph
     queue = deque((node, 0, node) for node in sorted(changed))
-    seen = set(changed)
+    seen = set(changed) | set(skip)
     rows: list[dict] = []
     stopped_by = None
     while queue:
@@ -111,8 +126,9 @@ def _affected(engine: QueryEngine, changed: dict[str, str], depth: int, limit: i
             if attrs.get("node_type") == "transformation":
                 queue.appendleft((neighbor, distance, origin))
                 continue
-            rows.append({"node": neighbor, "node_type": attrs.get("node_type"), "distance": distance + 1,
-                         "via": origin, "edge_type": edge.get("edge_type"), "evidence": engine._evidence(neighbor, edge)})
+            if report(neighbor):
+                rows.append({"node": neighbor, "node_type": attrs.get("node_type"), "distance": distance + 1,
+                             "via": origin, "edge_type": edge.get("edge_type"), "evidence": engine._evidence(neighbor, edge)})
             if len(rows) >= limit or len(seen) >= engine.MAX_VISITED:
                 return rows, "limit"
             # Configuration (tests, docs, metrics) does not change the data downstream consumers read.
@@ -121,30 +137,67 @@ def _affected(engine: QueryEngine, changed: dict[str, str], depth: int, limit: i
     return rows, stopped_by
 
 
+def _located(engine: QueryEngine, node: str, path: str) -> dict[str, Any]:
+    """Evidence for a changed node; datasets have no span of their own, so cite the changed file."""
+    evidence = engine._evidence(node)
+    if not evidence["path"]:
+        evidence["path"] = path
+    return evidence
+
+
 def change_impact(repo: Path, base: str = "main", *, depth: int = 10, limit: int = 100,
                   scan_settings: ScanSettings | None = None) -> dict[str, Any]:
     """Analyze the current checkout and report the nodes a diff against `base` changes and affects."""
     repo = Path(repo).resolve(strict=True)
     if not 1 <= depth <= QueryEngine.MAX_DEPTH or not 1 <= limit <= QueryEngine.MAX_RESULTS:
         raise QueryError("Depth or limit is out of range")
-    merge_base, ranges, deleted = changed_lines(repo, base)
-    orchestrator = Orchestrator(scan_settings=scan_settings)
+    merge_base, ranges, old_ranges, deleted = changed_lines(repo, base)
     with redirect_stdout(sys.stderr):
-        run = orchestrator.run(str(repo))
+        run = Orchestrator(scan_settings=scan_settings).run(str(repo))
     engine = QueryEngine.open(repo)
+    graph = engine.graph.graph
     changed = _changed_nodes(engine, ranges)
     affected, stopped_by = _affected(engine, changed, depth, limit)
-    graph = engine.graph.graph
-    covered = set(changed.values())
+    rows = [{"node": node, "node_type": graph.nodes[node].get("node_type"), "path": path, "removed": False,
+             "evidence": _located(engine, node, path)} for node, path in sorted(changed.items())]
+
+    statuses = [run.get("status")]
+    if old_ranges:
+        # Removed lines can only be mapped in the merge base: deleted files and functions,
+        # and statements whose tables are no longer written. Their dependents that still
+        # exist are affected.
+        with tempfile.TemporaryDirectory(prefix="cartographer_base_") as temp:
+            worktree = Path(temp) / "base"
+            prefix = _git(repo, "rev-parse", "--show-prefix").strip()
+            _git(repo, "worktree", "add", "--quiet", "--detach", str(worktree), merge_base)
+            try:
+                base_root = worktree / prefix
+                with redirect_stdout(sys.stderr):
+                    base_run = Orchestrator(scan_settings=scan_settings).run(str(base_root), output_dir=Path(temp) / "out")
+                statuses.append(base_run.get("status"))
+                base_engine = QueryEngine.open(base_root, Path(base_run["artifact_directory"]))
+                base_changed = {node: path for node, path in _changed_nodes(base_engine, old_ranges).items()
+                                if node not in changed}
+                reported = {row["node"] for row in affected}
+                more, more_stopped = _affected(base_engine, base_changed, depth, limit - len(affected),
+                                               report=lambda node: node in graph and node not in reported,
+                                               skip=set(changed)) if len(affected) < limit else ([], "limit")
+                affected += more
+                stopped_by = stopped_by or more_stopped
+                base_graph = base_engine.graph.graph
+                rows += [{"node": node, "node_type": base_graph.nodes[node].get("node_type"), "path": path,
+                          "removed": node not in graph, "evidence": _located(base_engine, node, path)}
+                         for node, path in sorted(base_changed.items())]
+            finally:
+                _git(repo, "worktree", "remove", "--force", str(worktree))
+    status = next((s for s in ("failed", "partial") if s in statuses), "complete")
+    covered = {row["path"] for row in rows}
     return {
         "schema_version": 1, "query": "change_impact", "repository": str(repo), "base": base,
-        "merge_base": merge_base, "status": "complete" if run.get("status") == "no_changes" else run.get("status"),
-        "snapshot_id": engine.snapshot_id,
-        "changed_files": sorted(ranges), "deleted_files": deleted,
-        "unmapped_files": sorted(set(ranges) - covered),
-        "changed": [{"node": node, "node_type": graph.nodes[node].get("node_type"), "path": path,
-                     "evidence": engine._evidence(node)} for node, path in sorted(changed.items())],
-        "affected": affected, "stopped_by": stopped_by, "truncated": stopped_by is not None,
+        "merge_base": merge_base, "status": status, "snapshot_id": engine.snapshot_id,
+        "changed_files": sorted(ranges.keys() | set(deleted)), "deleted_files": deleted,
+        "unmapped_files": sorted((ranges.keys() | set(deleted)) - covered),
+        "changed": rows, "affected": affected, "stopped_by": stopped_by, "truncated": stopped_by is not None,
     }
 
 
@@ -168,14 +221,14 @@ def to_markdown(report: dict[str, Any]) -> str:
         lines += [f"Nothing indexed depends on the {len(report['changed'])} changed nodes since `{report['base']}`.", ""]
     if report["changed"]:
         table = ["| Changed | Type | Location |", "| --- | --- | --- |"]
-        table += [f"| `{row['node']}` | {row['node_type']} | {location(row['evidence'])} |" for row in report["changed"]]
+        table += [f"| `{row['node']}` | {row['node_type']}{' (removed)' if row.get('removed') else ''} "
+                  f"| {location(row['evidence'])} |" for row in report["changed"]]
         if len(report["changed"]) > 10:
             # Keep long lists out of the way; GitHub needs blank lines around a table inside <details>.
             table = ["<details><summary>Changed nodes</summary>", "", *table, "", "</details>"]
         lines += [*table, ""]
     if report["deleted_files"]:
-        lines += ["Deleted files (dependents of what they defined are not traced): "
-                  + ", ".join(f"`{path}`" for path in report["deleted_files"]), ""]
+        lines += ["Deleted files: " + ", ".join(f"`{path}`" for path in report["deleted_files"]), ""]
     if report["truncated"]:
         lines += ["Results were capped; run `cartographer diff` with a larger `--depth` or `--limit`.", ""]
     if report["status"] != "complete":
