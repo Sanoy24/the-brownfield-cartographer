@@ -2,7 +2,7 @@
 CLI entry point for The Brownfield Cartographer.
 
 Provides the `cartographer` commands: analyze, overview, find, impact,
-lineage, and an interactive query loop, all backed by QueryEngine.
+lineage, diff, and an interactive query loop, all backed by QueryEngine.
 """
 
 from __future__ import annotations
@@ -284,6 +284,33 @@ def lineage(dataset: str, repo: Path = typer.Option(Path("."), "--repo"),
     """Trace supported upstream or downstream dataset lineage."""
     _run_query(_query_engine(repo, index_dir, as_json), "trace_data_lineage", as_json,
                dataset=dataset, direction=direction, depth=depth, limit=limit)
+
+
+@app.command("diff")
+def diff_command(repo: Path = typer.Option(Path("."), "--repo"),
+                 base: str = typer.Option("main", "--base", help="Branch or commit to compare against (its merge base is used)"),
+                 depth: int = typer.Option(10, min=1, max=20),
+                 limit: int = typer.Option(100, min=1, max=200),
+                 dialect: str | None = typer.Option(None, "--dialect", help="SQL dialect for all SQL"),
+                 as_json: bool = typer.Option(False, "--json")) -> None:
+    """
+    Report what the changes since --base touch and what they can affect.
+
+    Analyzes the current checkout (offline), maps changed lines to functions,
+    SQL statements, dbt models and Airflow tasks, and traces their dependents.
+    Prints Markdown suitable for a pull-request comment, or JSON.
+    """
+    from brownfield_cartographer.diff import change_impact, to_markdown
+
+    try:
+        report = change_impact(repo, base, depth=depth, limit=limit, scan_settings=ScanSettings(sql_dialect=dialect))
+    except (ValueError, OSError, RuntimeError) as exc:
+        if as_json:
+            typer.echo(json.dumps({"error": str(exc)}))
+        else:
+            console.print(f"Error: {exc}", markup=False)
+        raise typer.Exit(code=1) from exc
+    typer.echo(json.dumps(report, indent=2) if as_json else to_markdown(report))
 
 
 if __name__ == "__main__":

@@ -7,6 +7,17 @@ versions may contain breaking changes.
 
 ## [Unreleased]
 
+### Added
+
+- `cartographer diff --base <branch>`: maps the lines changed since the merge
+  base (committed, uncommitted and untracked) onto functions, modules, SQL
+  statements, dbt models, schema YAML and Airflow tasks, then lists what they
+  can affect downstream with evidence. Markdown for pull-request comments, or
+  `--json`. Configured models are listed without following their downstream,
+  since tests, docs and metrics do not change the data consumers read.
+- A GitHub Action (`uses: Sanoy24/the-brownfield-cartographer@<tag>`) that
+  posts the report as one pull-request comment, updated on each push.
+
 ## [0.8.0] - 2026-10-14
 
 Makes Cartographer installable as a Claude Code plugin and lists it in the

@@ -1,0 +1,58 @@
+name: Brownfield Cartographer change impact
+description: Comment on pull requests with the code, SQL, dbt models and Airflow tasks a change can affect
+branding:
+  icon: map
+  color: blue
+inputs:
+  base:
+    description: Branch or commit to compare against; defaults to the pull request's base branch
+    required: false
+    default: ""
+  repo:
+    description: Path of the repository to analyze
+    required: false
+    default: "."
+  comment:
+    description: Post or update one pull-request comment with the report
+    required: false
+    default: "true"
+  github-token:
+    description: Token used to post the comment (needs pull-requests write)
+    required: false
+    default: ${{ github.token }}
+outputs:
+  report:
+    description: Path of the JSON report
+    value: ${{ steps.diff.outputs.report }}
+runs:
+  using: composite
+  steps:
+    - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+    - id: diff
+      shell: bash
+      env:
+        BASE: ${{ inputs.base || format('origin/{0}', github.base_ref || github.event.repository.default_branch) }}
+        REPO: ${{ inputs.repo }}
+        ACTION_PATH: ${{ github.action_path }}
+        OUT: ${{ runner.temp }}/cartographer
+      run: |
+        mkdir -p "$OUT"
+        cartographer() { uvx --quiet --from "$ACTION_PATH" cartographer "$@"; }
+        cartographer diff --repo "$REPO" --base "$BASE" --json > "$OUT/report.json"
+        { echo '<!-- brownfield-cartographer-diff -->'; cartographer diff --repo "$REPO" --base "$BASE"; } > "$OUT/comment.md"
+        cat "$OUT/comment.md" >> "$GITHUB_STEP_SUMMARY"
+        echo "report=$OUT/report.json" >> "$GITHUB_OUTPUT"
+    - if: inputs.comment == 'true' && github.event.pull_request.number
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        PR: ${{ github.event.pull_request.number }}
+        BODY: ${{ runner.temp }}/cartographer/comment.md
+      run: |
+        existing=$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" --paginate \
+          --jq '.[] | select(.body | startswith("<!-- brownfield-cartographer-diff -->")) | .id' | head -1) || existing=
+        if [ -n "$existing" ]; then
+          gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$existing" -F body=@"$BODY" > /dev/null
+        else
+          gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" -F body=@"$BODY" > /dev/null
+        fi || echo "::warning::Could not post the comment (forks get a read-only token); the report is in the job summary."
