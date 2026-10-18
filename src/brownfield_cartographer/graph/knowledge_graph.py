@@ -165,9 +165,12 @@ class KnowledgeGraph:
             analysis_method="python_import",
         )
 
-    def add_calls_edge(self, caller: str, callee: str) -> None:
-        """Record that one function calls another."""
-        self.graph.add_edge(caller, callee, edge_type="CALLS")
+    def add_calls_edge(self, caller: str, callee: str, source_file: str | None = None,
+                       line: int | None = None) -> None:
+        """Record that one function calls another, citing the first call site."""
+        self.graph.add_edge(caller, callee, edge_type="CALLS", source_file=source_file,
+                            line_range=[line, line] if line else None,
+                            analysis_method="python_calls", confidence="static")
 
     def add_configures_edge(self, config_file: str, target: str) -> None:
         """Record that a config file configures a module or pipeline."""

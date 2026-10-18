@@ -129,7 +129,8 @@ def test_deleted_module_reports_importers_that_still_use_it(repo):
     removed = {c["node"] for c in report["changed"] if c["removed"]}
     assert {"lib/util.py", "lib/util.py::helper"} <= removed
     # The import no longer resolves in the current graph; it is found in the merge base.
-    assert [(a["node"], a["edge_type"]) for a in report["affected"]] == [("app.py", "IMPORTS")]
+    assert sorted((a["node"], a["edge_type"]) for a in report["affected"]) == [
+        ("app.py", "IMPORTS"), ("app.py::main", "CALLS")]
 
 
 def test_deleted_sql_file_reports_consumers_of_the_tables_it_wrote(repo):
@@ -138,3 +139,12 @@ def test_deleted_sql_file_reports_consumers_of_the_tables_it_wrote(repo):
     assert report["deleted_files"] == ["sql/stage.sql"]
     assert {"s.orders", "s.customers"} <= {c["node"] for c in report["changed"]}
     assert "m.revenue" in {a["node"] for a in report["affected"]}
+
+
+def test_removed_function_reports_the_functions_that_still_call_it(repo):
+    _write(repo, {"lib/util.py": "def unused():\n    return 2\n"})
+    report = change_impact(repo, "main")
+    assert "lib/util.py::helper" in {c["node"] for c in report["changed"] if c["removed"]}
+    calls = [a for a in report["affected"] if a["node"] == "app.py::main"]
+    assert calls and calls[0]["edge_type"] == "CALLS"
+    assert calls[0]["evidence"]["path"] == "app.py" and calls[0]["evidence"]["line_range"] == [5, 5]

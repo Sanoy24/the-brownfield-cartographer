@@ -160,7 +160,8 @@ Changed lines since the merge base with `--base` (committed, uncommitted and
 untracked) are mapped to functions, modules, SQL statements, dbt models, schema
 YAML and Airflow tasks, and their downstream dependents are listed with
 evidence. The merge base is analyzed too, so removed code counts: deleting a
-module, function or model reports the importers and models that still use it.
+module, function or model reports the importers, callers and models that still
+use it.
 
 To comment on every pull request, add a workflow:
 
@@ -223,7 +224,7 @@ unchanged successful snapshots can reuse the complete index.
 
 | Input | Current support |
 | --- | --- |
-| Python | Functions/classes, supported absolute/relative imports; conservative literal I/O associations (pandas, Spark readers and writers). SQL passed to `execute`/`executemany`/`executescript`, `.sql()` and `read_sql` is parsed from literals and string constants (same module or imported from another repository module), including `text()` and DB-API placeholders. f-strings that interpolate only values (comparisons, `IN`, `LIMIT`, quoted literals) are resolved; SQL with interpolated table names or projections, concatenation or `.format` is reported as dynamic, not guessed |
+| Python | Functions/classes, supported absolute/relative imports, and calls between repository functions (same-module names, imported names and modules, `self`/`cls` methods; calls on other objects and dynamic calls are not guessed); conservative literal I/O associations (pandas, Spark readers and writers). SQL passed to `execute`/`executemany`/`executescript`, `.sql()` and `read_sql` is parsed from literals and string constants (same module or imported from another repository module), including `text()` and DB-API placeholders. f-strings that interpolate only values (comparisons, `IN`, `LIMIT`, quoted literals) are resolved; SQL with interpolated table names or projections, concatenation or `.format` is reported as dynamic, not guessed |
 | SQL | SELECT/UNION, CTAS, INSERT, UPDATE, DELETE and MERGE; statement spans and table dependencies. DDL and transaction statements without table lineage are skipped; other statements, such as COPY, are reported individually without dropping the rest of the file. Each file is parsed with the best-fitting dialect (DuckDB, BigQuery, Snowflake, Postgres, MySQL, Spark, T-SQL, Trino), recorded as `sql:<dialect>` in evidence; `--dialect` pins one |
 | dbt | Explicit manifest v12 ingestion for models, seeds, snapshots and sources; basic SQL/YAML fallback without a manifest. Projects are found anywhere in the repository, including several per repository |
 | Columns | Column-level lineage for `CREATE ... AS`, `INSERT ... SELECT` (including column lists) in SQL files, SQL embedded in Python, Airflow inline SQL, dbt models from a compiled manifest (`--dbt-manifest`, after `dbt compile`), and dbt source models whose only Jinja is `ref`/`source`/`config`/comments. Each edge is `copy` or `derived`. `SELECT *` over CTEs and subqueries is expanded; `SELECT *` over tables, unqualified columns in joins, and models with other Jinja are counted as unresolved, not guessed |
@@ -250,7 +251,7 @@ known gaps. It runs in CI.
 uv sync --frozen
 uv run --no-sync pytest -q
 uv run --no-sync ruff check src tests scripts
-uv run --no-sync mypy -p brownfield_cartographer.scanner -p brownfield_cartographer.persistence -p brownfield_cartographer.query_api -p brownfield_cartographer.analyzers.javascript_analyzer -p brownfield_cartographer.analyzers.embedded_sql -p brownfield_cartographer.analyzers.sql_lineage -p brownfield_cartographer.analyzers.airflow_dag -p brownfield_cartographer.analyzers.dbt_manifest -p brownfield_cartographer.diff --follow-imports=skip
+uv run --no-sync mypy -p brownfield_cartographer.scanner -p brownfield_cartographer.persistence -p brownfield_cartographer.query_api -p brownfield_cartographer.analyzers.javascript_analyzer -p brownfield_cartographer.analyzers.embedded_sql -p brownfield_cartographer.analyzers.sql_lineage -p brownfield_cartographer.analyzers.airflow_dag -p brownfield_cartographer.analyzers.dbt_manifest -p brownfield_cartographer.diff -p brownfield_cartographer.analyzers.python_calls --follow-imports=skip
 uv build
 uv run --no-sync python scripts/check_wheel.py
 ```

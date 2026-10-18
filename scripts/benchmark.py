@@ -2,7 +2,7 @@
 
 Each corpus in benchmarks/corpora/ is analyzed in a temporary copy and compared
 with benchmarks/expected/<corpus>.json. Precision and recall are reported per
-fact type (module imports, function definitions, dataset lineage).
+fact type (module imports, function definitions and calls, dataset lineage).
 
 --check fails on any false positive, on any miss not listed under known_gaps,
 on a listed gap that is now found, or on an unexpected run status.
@@ -23,7 +23,7 @@ from brownfield_cartographer.graph.knowledge_graph import KnowledgeGraph
 from brownfield_cartographer.orchestrator import Orchestrator
 
 ROOT = Path(__file__).resolve().parent.parent / "benchmarks"
-KINDS = ("imports", "functions", "lineage", "columns", "tasks", "schedules", "runs")
+KINDS = ("imports", "functions", "calls", "lineage", "columns", "tasks", "schedules", "runs")
 
 
 def _key(fact) -> str:
@@ -43,6 +43,8 @@ def extract(index: Path) -> dict[str, set[str]]:
     for source, target, data in graph.edges(data=True):
         if data.get("edge_type") == "IMPORTS":
             facts["imports"].add(_key((source, target)))
+        elif data.get("edge_type") == "CALLS":
+            facts["calls"].add(_key((source, target)))
         elif data.get("edge_type") == "DERIVES":
             facts["columns"].add(_key((source, target)))
         elif data.get("edge_type") == "SCHEDULES":
