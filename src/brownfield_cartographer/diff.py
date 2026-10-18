@@ -149,7 +149,7 @@ def change_impact(repo: Path, base: str = "main", *, depth: int = 10, limit: int
 
 
 def to_markdown(report: dict[str, Any]) -> str:
-    """A pull-request comment: changed nodes, then what they can affect, with evidence."""
+    """A pull-request comment: what the changes can affect, then the changed nodes, with evidence."""
     def location(evidence: dict) -> str:
         text = evidence.get("path") or "unknown"
         return text + (":" + "-".join(map(str, evidence["line_range"])) if evidence.get("line_range") else "")
@@ -157,19 +157,22 @@ def to_markdown(report: dict[str, Any]) -> str:
     lines = ["## Cartographer change impact", ""]
     if not report["changed"] and not report["deleted_files"]:
         lines.append(f"No indexed code, models, tasks or datasets changed since `{report['base']}`.")
-    if report["changed"]:
-        lines += [f"**{len(report['changed'])} changed** since `{report['base']}`:", "",
-                  "| Changed | Type | Location |", "| --- | --- | --- |"]
-        lines += [f"| `{row['node']}` | {row['node_type']} | {location(row['evidence'])} |" for row in report["changed"]]
-        lines.append("")
     if report["affected"]:
-        lines += [f"**{len(report['affected'])} potentially affected** downstream:", "",
+        lines += [f"**{len(report['affected'])} potentially affected** by {len(report['changed'])} changed nodes "
+                  f"since `{report['base']}`:", "",
                   "| Affected | Type | Via | Evidence |", "| --- | --- | --- | --- |"]
         lines += [f"| `{row['node']}` | {row['node_type']} | `{row['via']}` ({row['edge_type']}) | {location(row['evidence'])} |"
                   for row in report["affected"]]
         lines.append("")
     elif report["changed"]:
-        lines += ["Nothing indexed depends on these changes.", ""]
+        lines += [f"Nothing indexed depends on the {len(report['changed'])} changed nodes since `{report['base']}`.", ""]
+    if report["changed"]:
+        table = ["| Changed | Type | Location |", "| --- | --- | --- |"]
+        table += [f"| `{row['node']}` | {row['node_type']} | {location(row['evidence'])} |" for row in report["changed"]]
+        if len(report["changed"]) > 10:
+            # Keep long lists out of the way; GitHub needs blank lines around a table inside <details>.
+            table = ["<details><summary>Changed nodes</summary>", "", *table, "", "</details>"]
+        lines += [*table, ""]
     if report["deleted_files"]:
         lines += ["Deleted files (dependents of what they defined are not traced): "
                   + ", ".join(f"`{path}`" for path in report["deleted_files"]), ""]
