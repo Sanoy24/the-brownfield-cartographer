@@ -1,7 +1,7 @@
 {
   "name": "brownfield-cartographer",
   "displayName": "Brownfield Cartographer",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "description": "What breaks if I change this? Local, evidence-backed impact and data lineage (tables, columns, Airflow tasks) across SQL, dbt, Python and TypeScript.",
   "author": {
     "name": "Yonas Mekonnen",
