@@ -7,6 +7,12 @@ versions may contain breaking changes.
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-10-24
+
+Adds pull-request change impact: `cartographer diff` and a GitHub Action report
+which functions, models, tables and tasks a branch changes or removes, and what
+depends on them. Python call edges make that report function-level.
+
 ### Added
 
 - `cartographer diff --base <branch>`: maps the lines changed since the merge
@@ -25,6 +31,11 @@ versions may contain breaking changes.
   `cartographer diff` now report the functions that call a changed or removed
   function. The benchmark scores calls; on 40 sampled edges from `requests` and
   `click`, all were correct.
+
+### Changed
+
+- Indexes built by earlier versions are rebuilt on the next `analyze`, even for
+  an unchanged repository, so they gain call edges.
 
 ## [0.8.0] - 2026-10-14
 
