@@ -23,18 +23,21 @@ class ScanSettings:
     max_depth: int = 128
     dbt_manifest: str | None = None
     sql_dialect: str | None = None
+    dbt_catalog: str | None = None
 
     def __post_init__(self) -> None:
         if min(self.max_file_bytes, self.max_total_bytes, self.max_files, self.max_entries, self.max_depth) <= 0:
             raise ValueError("Scanner limits must be positive")
-        if self.dbt_manifest is not None:
-            path = Path(self.dbt_manifest)
-            if (not self.dbt_manifest or len(self.dbt_manifest) > 1000 or "\\" in self.dbt_manifest
-                    or path.is_absolute() or PureWindowsPath(self.dbt_manifest).drive
+        for label, value in (("manifest", self.dbt_manifest), ("catalog", self.dbt_catalog)):
+            if value is None:
+                continue
+            path = Path(value)
+            if (not value or len(value) > 1000 or "\\" in value
+                    or path.is_absolute() or PureWindowsPath(value).drive
                     or ".." in path.parts or path.suffix != ".json"
                     or any(part in {".git", ".aws", ".agents", ".codex", ".cartography"}
                            or part.startswith(".env") for part in path.parts)):
-                raise ValueError("dbt manifest must be a repository-relative JSON path outside protected directories")
+                raise ValueError(f"dbt {label} must be a repository-relative JSON path outside protected directories")
         if self.sql_dialect is not None:
             from brownfield_cartographer.analyzers.sql_lineage import validate_dialect
             validate_dialect(self.sql_dialect)
@@ -62,12 +65,15 @@ class ScanResult:
     complete: bool = True
     dbt_manifest: Path | None = None
     dbt_manifest_content: str | None = field(default=None, repr=False)
+    dbt_catalog: Path | None = None
+    dbt_catalog_content: str | None = field(default=None, repr=False)
     settings: ScanSettings | None = None
 
     def report(self) -> dict:
         return {"complete": self.complete, "files": len(self.files),
                 "diagnostics": [vars(d) for d in self.diagnostics],
-                "dbt_manifest": self.dbt_manifest.relative_to(self.root).as_posix() if self.dbt_manifest else None}
+                "dbt_manifest": self.dbt_manifest.relative_to(self.root).as_posix() if self.dbt_manifest else None,
+                "dbt_catalog": self.dbt_catalog.relative_to(self.root).as_posix() if self.dbt_catalog else None}
 
 
 def _link(path: Path) -> bool:
@@ -187,21 +193,23 @@ def scan_repository(root: Path, settings: ScanSettings | None = None) -> ScanRes
     walk(root, [])
     # A selected generated artifact is an explicit exception to ignore rules.
     # It still obeys repository scope, ancestor-link and resource boundaries.
-    if settings.dbt_manifest is not None:
-        manifest = root / settings.dbt_manifest
-        result.dbt_manifest = manifest
-        ancestors = (manifest, *manifest.parents)
+    for name, selected in (("dbt_manifest", settings.dbt_manifest), ("dbt_catalog", settings.dbt_catalog)):
+        if selected is None:
+            continue
+        artifact = root / selected
+        setattr(result, name, artifact)
+        ancestors = (artifact, *artifact.parents)
         if any(_link(path) for path in ancestors if path.is_relative_to(root)):
-            diagnostic(manifest, "symlink", True)
-        elif len(manifest.relative_to(root).parts) > settings.max_depth:
-            diagnostic(manifest, "depth_limit", True)
+            diagnostic(artifact, "symlink", True)
+        elif len(artifact.relative_to(root).parts) > settings.max_depth:
+            diagnostic(artifact, "depth_limit", True)
         elif len(files) >= settings.max_files:
-            diagnostic(manifest, "file_limit", True)
+            diagnostic(artifact, "file_limit", True)
         else:
-            data = read(manifest)
+            data = read(artifact)
             if data is not None:
-                result.dbt_manifest_content = data.decode("utf-8")
-                result.fingerprints[manifest.relative_to(root).as_posix()] = hashlib.sha256(data).hexdigest()
+                setattr(result, f"{name}_content", data.decode("utf-8"))
+                result.fingerprints[artifact.relative_to(root).as_posix()] = hashlib.sha256(data).hexdigest()
     result.files = tuple(sorted(files))
     result.fingerprints = dict(sorted(result.fingerprints.items()))
     return result

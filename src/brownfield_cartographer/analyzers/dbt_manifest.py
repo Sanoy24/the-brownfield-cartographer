@@ -167,3 +167,28 @@ def parse_dbt_manifest(content: str, artifact_path: str) -> dict[str, Any]:
     return {"datasets": datasets, "transformations": transformations, "diagnostics": diagnostics,
             "definition_files": sorted({path for _, path in resources.values()}),
             "manifest_version": 12}
+
+
+def parse_dbt_catalog(content: str) -> dict[str, list[str]]:
+    """Column names per relation from a dbt catalog, for column lineage.
+
+    Each model, seed, snapshot and source is keyed by `database.schema.name`,
+    and also by `schema.name` and `name` where those are unique in the catalog.
+    """
+    data = json.loads(content)
+    version = data.get("metadata", {}).get("dbt_schema_version", "") if isinstance(data, dict) else ""
+    if not isinstance(version, str) or "/catalog/" not in version:
+        raise ValueError("Not a dbt catalog artifact (metadata.dbt_schema_version)")
+    entries = [*data.get("nodes", {}).values(), *data.get("sources", {}).values()]
+    if len(entries) > MAX_RESOURCES:
+        raise ValueError(f"dbt catalog has more than {MAX_RESOURCES} resources")
+    keyed: dict[str, list[list[str]]] = {}
+    for entry in entries:
+        metadata, columns = entry.get("metadata", {}), entry.get("columns", {})
+        parts = [metadata.get(k) for k in ("database", "schema", "name")]
+        if not isinstance(columns, dict) or not columns or not all(isinstance(p, str) and p for p in parts):
+            continue
+        names = [str(column.get("name", key)).lower() for key, column in columns.items() if isinstance(column, dict)]
+        for depth in (3, 2, 1):
+            keyed.setdefault(".".join(parts[-depth:]).lower(), []).append(names)
+    return {key: found[0] for key, found in keyed.items() if len(found) == 1}
