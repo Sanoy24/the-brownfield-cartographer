@@ -69,6 +69,14 @@ could come from more than one source stays unresolved. A `JOIN ... USING`
 where one side's columns are unknown still cannot be traced, and `* EXCEPT`
 and `* REPLACE` are not expanded.
 
+Without a manifest, a model is rendered for column lineage when its Jinja is
+limited to comments, `config()`, `ref()`, `source()`, `{% set %}` of string or
+number literals (or lists of them), `{% for %}` loops over those lists,
+`{{ name }}`, and `{% if loop.first %}`/`{% if not loop.last %}` separators.
+Anything else (project or package macros, `var()`, `target`, filters, other
+conditions) leaves the model's columns unresolved, counted as
+`skipped_templates` in the summary. No template code is executed.
+
 Every `dbt_project.yml` in the repository is treated as a project root, so
 projects in subfolders (for example `analytics/dbt/`) and several projects in
 one repository are supported. The analysis summary lists them as

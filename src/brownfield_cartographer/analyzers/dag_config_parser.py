@@ -16,6 +16,7 @@ from pathlib import Path
 
 import yaml
 
+from brownfield_cartographer.analyzers import jinja_lite
 from brownfield_cartographer.models.schemas import (
     ConfiguresEdge,
     DatasetNode,
@@ -34,10 +35,18 @@ _SOURCE_RENDER = re.compile(r"""\{\{\s*source\(\s*['"](\w+)['"]\s*,\s*['"](\w+)[
 
 
 def render_simple_model(sql_text: str) -> str | None:
-    """Render a model whose only Jinja is comments, config(), ref() and source(); otherwise None."""
+    """Render a model whose Jinja is comments, config(), ref(), source() and literal set/for loops.
+
+    Anything else (macros, adapter calls, other conditions) returns None.
+    """
     text = _JINJA_CONFIG.sub("", _JINJA_COMMENT.sub("", sql_text))
     text = _SOURCE_RENDER.sub(r"\1.\2", _REF_RENDER.sub(r"\1", text))
-    return None if "{{" in text or "{%" in text else text.strip().rstrip(";")
+    if "{{" in text or "{%" in text:
+        rendered = jinja_lite.render(text)
+        if rendered is None or "{{" in rendered or "{%" in rendered:
+            return None
+        text = rendered
+    return text.strip().rstrip(";")
 
 
 REF_PATTERN = re.compile(r"""\{\{\s*ref\(\s*['"](\w+)['"]\s*\)\s*\}\}""")
