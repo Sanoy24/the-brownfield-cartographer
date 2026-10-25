@@ -24,7 +24,7 @@ from brownfield_cartographer.scanner import ScanResult, ScanSettings, scan_repos
 
 logger = logging.getLogger(__name__)
 console = Console()
-ANALYSIS_VERSION = 5
+ANALYSIS_VERSION = 6
 
 
 def _is_github_url(value: str) -> bool:

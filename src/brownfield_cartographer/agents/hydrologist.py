@@ -20,9 +20,13 @@ import networkx as nx
 from brownfield_cartographer.analyzers import embedded_sql
 from brownfield_cartographer.analyzers.airflow_dag import parse_airflow
 from brownfield_cartographer.analyzers.dag_config_parser import parse_dbt_project
-from brownfield_cartographer.analyzers.dbt_manifest import parse_dbt_manifest
+from brownfield_cartographer.analyzers.dbt_manifest import (
+    parse_dbt_catalog,
+    parse_dbt_manifest,
+)
 from brownfield_cartographer.analyzers.sql_lineage import (
     analyze_sql_file,
+    known_schema,
     sql_statements,
 )
 from brownfield_cartographer.graph.knowledge_graph import KnowledgeGraph
@@ -34,6 +38,7 @@ from brownfield_cartographer.models.schemas import (
 from brownfield_cartographer.scanner import ScanResult, scan_repository
 
 logger = logging.getLogger(__name__)
+MAX_SCHEMA_PASSES = 5
 
 # Regex patterns for Python data I/O operations
 PANDAS_READ_PATTERNS = [
@@ -269,9 +274,26 @@ class Hydrologist:
         self.dbt_mode = "none"
 
         logger.info("Hydrologist: analyzing data flows in %s", repo_root)
-        all_transformations, all_datasets, sql_count, py_count = (
-            self._collect_lineage_full(repo_root, knowledge_graph)
-        )
+        catalog, catalog_diagnostics = self._dbt_catalog(repo_root)
+        # Column lineage resolves against the columns each table is known to have:
+        # from the catalog, and from the definitions found by the previous pass.
+        # Each pass can resolve one more layer of `SELECT *` and joins.
+        schema = dict(catalog)
+        cache: dict = {}
+        passes = 0
+        while passes < MAX_SCHEMA_PASSES:
+            passes += 1
+            self.diagnostics = list(catalog_diagnostics)
+            with known_schema(schema, cache) as context:
+                all_transformations, all_datasets, sql_count, py_count = (
+                    self._collect_lineage_full(repo_root, knowledge_graph)
+                )
+            derived = {table: columns for table, columns in context.declared.items()
+                       if columns and not table.startswith("__cartographer")}
+            following = {**derived, **catalog}
+            if following == schema or not any(t.unresolved_columns for t in all_transformations):
+                break
+            schema = following
 
         for dataset in all_datasets:
             knowledge_graph.add_dataset_node(dataset)
@@ -301,6 +323,8 @@ class Hydrologist:
                                    if d.get("edge_type") == "DERIVES"),
                 "unresolved": sum(len(t.unresolved_columns) for t in all_transformations),
                 "skipped_templates": self.dbt_column_skipped,
+                "schema_tables": len(following),
+                "schema_passes": passes,
             },
         }
         logger.info(
@@ -310,6 +334,18 @@ class Hydrologist:
             len(sinks),
         )
         return summary
+
+    def _dbt_catalog(self, repo_root: Path) -> tuple[dict[str, list[str]], list[dict]]:
+        path = self.inventory.dbt_catalog
+        if path is None:
+            return {}, []
+        relative = path.relative_to(repo_root).as_posix()
+        if self.inventory.dbt_catalog_content is None:
+            return {}, [{"path": relative, "error": "Selected dbt catalog could not be safely scanned", "incomplete": True}]
+        try:
+            return parse_dbt_catalog(self.inventory.dbt_catalog_content), []
+        except (ValueError, TypeError, AttributeError) as exc:
+            return {}, [{"path": relative, "error": f"Invalid dbt catalog: {exc}", "incomplete": True}]
 
     def _collect_lineage_full(
         self, repo_root: Path, knowledge_graph: KnowledgeGraph

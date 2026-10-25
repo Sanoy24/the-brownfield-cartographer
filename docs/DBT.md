@@ -55,6 +55,20 @@ through `relation_name`, so column nodes look like
 `model.shop.orders::order_id`. The manifest's `adapter_type` selects the SQL
 dialect. Cartographer never runs dbt itself.
 
+Column lineage needs to know which columns a table has to expand `SELECT *`
+and to place unqualified columns in joins. Cartographer learns this from the
+repository: a model or `CREATE ... AS` whose columns all resolve defines its
+table's columns for the models that read it, and analysis repeats (up to five
+passes) while that resolves more. `--dbt-catalog target/catalog.json`, written
+by `dbt docs generate`, adds the columns of sources and seeds, which the
+repository alone cannot show. The same path rules as for the manifest apply.
+Catalog relations are keyed by `database.schema.name`, and by `schema.name`
+and `name` where unique, so they match both compiled SQL and the source
+fallback. With a manifest, only the catalog supplies columns. A column that
+could come from more than one source stays unresolved. A `JOIN ... USING`
+where one side's columns are unknown still cannot be traced, and `* EXCEPT`
+and `* REPLACE` are not expanded.
+
 Every `dbt_project.yml` in the repository is treated as a project root, so
 projects in subfolders (for example `analytics/dbt/`) and several projects in
 one repository are supported. The analysis summary lists them as

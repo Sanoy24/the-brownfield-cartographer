@@ -149,13 +149,6 @@
     "columns": [
       {
         "edge": [
-          "stg_payments::amount",
-          "customers::customer_lifetime_value"
-        ],
-        "reason": "Unqualified column in a join is ambiguous without a schema."
-      },
-      {
-        "edge": [
           "stg_orders::order_id",
           "orders::order_id"
         ],

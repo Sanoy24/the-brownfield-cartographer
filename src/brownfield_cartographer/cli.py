@@ -91,6 +91,9 @@ def analyze(
     dbt_manifest: str | None = typer.Option(
         None, "--dbt-manifest", help="Repository-relative dbt v12 JSON artifact; explicitly overrides ignore rules for this file",
     ),
+    dbt_catalog: str | None = typer.Option(
+        None, "--dbt-catalog", help="Repository-relative dbt catalog.json (from `dbt docs generate`): table columns for column lineage",
+    ),
 ) -> None:
     """
     Analyze a codebase and generate cartography artifacts.
@@ -104,7 +107,7 @@ def analyze(
     output_dir = Path(output) if output else None
     orchestrator = None
     try:
-        orchestrator = Orchestrator(scan_settings=ScanSettings(dbt_manifest=dbt_manifest, sql_dialect=dialect))
+        orchestrator = Orchestrator(scan_settings=ScanSettings(dbt_manifest=dbt_manifest, sql_dialect=dialect, dbt_catalog=dbt_catalog))
         if as_json:
             with redirect_stdout(sys.stderr):
                 results = orchestrator.run(repo, output_dir=output_dir, full=full)

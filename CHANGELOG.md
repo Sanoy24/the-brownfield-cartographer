@@ -7,6 +7,18 @@ versions may contain breaking changes.
 
 ## [Unreleased]
 
+### Added
+
+- Column lineage resolves `SELECT *` over tables and unqualified columns in
+  joins using the columns each table is known to have: from `CREATE TABLE`
+  definitions, from `CREATE ... AS` statements and dbt models whose columns all
+  resolve, and from an optional dbt catalog (`--dbt-catalog
+  target/catalog.json`). A column found in more than one source stays
+  unresolved, and no column that traced before is lost. This adds 18 column
+  edges on dbt's jaffle-shop and 77 on Cal-ITP's data-infra warehouse (25
+  sampled, none found wrong), and closes the jaffle_shop
+  `customer_lifetime_value` benchmark gap at precision 1.00.
+
 ## [0.9.0] - 2026-10-24
 
 Adds pull-request change impact: `cartographer diff` and a GitHub Action report
