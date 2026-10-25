@@ -52,7 +52,7 @@ def test_column_queries_across_sql_python_and_dbt(tmp_path):
             "{#- daily summary -#}\n"
             "select d.order_id, d.gross as revenue from {{ ref('daily') }} as d\n"
         ),
-        "shop/models/looped.sql": "{% for c in ['a'] %}select {{ c }} from {{ ref('summary') }}{% endfor %}\n",
+        "shop/models/looped.sql": "select {{ dbt_utils.star(ref('summary')) }} from {{ ref('summary') }}\n",
     }
     for path, text in files.items():
         target = tmp_path / path
@@ -73,7 +73,7 @@ def test_column_queries_across_sql_python_and_dbt(tmp_path):
     impact = {r["node"] for r in engine.analyze_impact("raw.orders::amount")["data"]["results"]}
     assert "m.daily::gross" in impact
 
-    # dbt model with only ref(): columns resolved through the rendered SQL. Loops: skipped, counted.
+    # dbt model with only ref(): columns resolved through the rendered SQL. Macros: skipped, counted.
     revenue = engine.trace_data_lineage("summary::revenue", depth=1)["data"]["results"]
     assert [r["node"] for r in revenue] == ["daily::gross"]
     assert result["hydrologist"]["column_lineage"]["skipped_templates"] == 1

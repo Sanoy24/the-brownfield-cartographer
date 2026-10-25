@@ -9,6 +9,12 @@ versions may contain breaking changes.
 
 ### Added
 
+- dbt models whose Jinja includes literal `{% set %}` lists and `{% for %}`
+  loops over them (the jaffle_shop payment-method pattern) are rendered for
+  column lineage, with `loop.first`/`loop.last` separators and whitespace
+  control. Other Jinja is still reported, not guessed. The jaffle_shop columns
+  benchmark is now 31/31 at precision 1.00 with no known gaps.
+
 - Column lineage resolves `SELECT *` over tables and unqualified columns in
   joins using the columns each table is known to have: from `CREATE TABLE`
   definitions, from `CREATE ... AS` statements and dbt models whose columns all

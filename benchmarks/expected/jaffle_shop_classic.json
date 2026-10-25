@@ -2,214 +2,46 @@
   "description": "dbt-labs/jaffle_shop at fd7bfacae4f497ff044a6a0275268676bf1b64c3; lineage read from each model's ref() calls.",
   "status": "complete",
   "lineage": [
-    [
-      "raw_customers",
-      "stg_customers"
-    ],
-    [
-      "raw_orders",
-      "stg_orders"
-    ],
-    [
-      "raw_payments",
-      "stg_payments"
-    ],
-    [
-      "stg_customers",
-      "customers"
-    ],
-    [
-      "stg_orders",
-      "customers"
-    ],
-    [
-      "stg_payments",
-      "customers"
-    ],
-    [
-      "stg_orders",
-      "orders"
-    ],
-    [
-      "stg_payments",
-      "orders"
-    ]
+    ["raw_customers", "stg_customers"],
+    ["raw_orders", "stg_orders"],
+    ["raw_payments", "stg_payments"],
+    ["stg_customers", "customers"],
+    ["stg_orders", "customers"],
+    ["stg_payments", "customers"],
+    ["stg_orders", "orders"],
+    ["stg_payments", "orders"]
   ],
   "columns": [
-    [
-      "raw_customers::id",
-      "stg_customers::customer_id"
-    ],
-    [
-      "raw_customers::first_name",
-      "stg_customers::first_name"
-    ],
-    [
-      "raw_customers::last_name",
-      "stg_customers::last_name"
-    ],
-    [
-      "raw_orders::id",
-      "stg_orders::order_id"
-    ],
-    [
-      "raw_orders::user_id",
-      "stg_orders::customer_id"
-    ],
-    [
-      "raw_orders::order_date",
-      "stg_orders::order_date"
-    ],
-    [
-      "raw_orders::status",
-      "stg_orders::status"
-    ],
-    [
-      "raw_payments::id",
-      "stg_payments::payment_id"
-    ],
-    [
-      "raw_payments::order_id",
-      "stg_payments::order_id"
-    ],
-    [
-      "raw_payments::payment_method",
-      "stg_payments::payment_method"
-    ],
-    [
-      "raw_payments::amount",
-      "stg_payments::amount"
-    ],
-    [
-      "stg_customers::customer_id",
-      "customers::customer_id"
-    ],
-    [
-      "stg_customers::first_name",
-      "customers::first_name"
-    ],
-    [
-      "stg_customers::last_name",
-      "customers::last_name"
-    ],
-    [
-      "stg_orders::order_date",
-      "customers::first_order"
-    ],
-    [
-      "stg_orders::order_date",
-      "customers::most_recent_order"
-    ],
-    [
-      "stg_orders::order_id",
-      "customers::number_of_orders"
-    ],
-    [
-      "stg_payments::amount",
-      "customers::customer_lifetime_value"
-    ],
-    [
-      "stg_orders::order_id",
-      "orders::order_id"
-    ],
-    [
-      "stg_orders::customer_id",
-      "orders::customer_id"
-    ],
-    [
-      "stg_orders::order_date",
-      "orders::order_date"
-    ],
-    [
-      "stg_orders::status",
-      "orders::status"
-    ],
-    [
-      "stg_payments::amount",
-      "orders::credit_card_amount"
-    ],
-    [
-      "stg_payments::amount",
-      "orders::coupon_amount"
-    ],
-    [
-      "stg_payments::amount",
-      "orders::bank_transfer_amount"
-    ],
-    [
-      "stg_payments::amount",
-      "orders::gift_card_amount"
-    ],
-    [
-      "stg_payments::amount",
-      "orders::amount"
-    ]
-  ],
-  "known_gaps": {
-    "columns": [
-      {
-        "edge": [
-          "stg_orders::order_id",
-          "orders::order_id"
-        ],
-        "reason": "The orders model uses a Jinja for loop; column lineage skips models with Jinja beyond ref/source/config."
-      },
-      {
-        "edge": [
-          "stg_orders::customer_id",
-          "orders::customer_id"
-        ],
-        "reason": "The orders model uses a Jinja for loop; column lineage skips models with Jinja beyond ref/source/config."
-      },
-      {
-        "edge": [
-          "stg_orders::order_date",
-          "orders::order_date"
-        ],
-        "reason": "The orders model uses a Jinja for loop; column lineage skips models with Jinja beyond ref/source/config."
-      },
-      {
-        "edge": [
-          "stg_orders::status",
-          "orders::status"
-        ],
-        "reason": "The orders model uses a Jinja for loop; column lineage skips models with Jinja beyond ref/source/config."
-      },
-      {
-        "edge": [
-          "stg_payments::amount",
-          "orders::credit_card_amount"
-        ],
-        "reason": "The orders model uses a Jinja for loop; column lineage skips models with Jinja beyond ref/source/config."
-      },
-      {
-        "edge": [
-          "stg_payments::amount",
-          "orders::coupon_amount"
-        ],
-        "reason": "The orders model uses a Jinja for loop; column lineage skips models with Jinja beyond ref/source/config."
-      },
-      {
-        "edge": [
-          "stg_payments::amount",
-          "orders::bank_transfer_amount"
-        ],
-        "reason": "The orders model uses a Jinja for loop; column lineage skips models with Jinja beyond ref/source/config."
-      },
-      {
-        "edge": [
-          "stg_payments::amount",
-          "orders::gift_card_amount"
-        ],
-        "reason": "The orders model uses a Jinja for loop; column lineage skips models with Jinja beyond ref/source/config."
-      },
-      {
-        "edge": [
-          "stg_payments::amount",
-          "orders::amount"
-        ],
-        "reason": "The orders model uses a Jinja for loop; column lineage skips models with Jinja beyond ref/source/config."
-      }
-    ]
-  }
+    ["raw_customers::first_name", "stg_customers::first_name"],
+    ["raw_customers::id", "stg_customers::customer_id"],
+    ["raw_customers::last_name", "stg_customers::last_name"],
+    ["raw_orders::id", "stg_orders::order_id"],
+    ["raw_orders::order_date", "stg_orders::order_date"],
+    ["raw_orders::status", "stg_orders::status"],
+    ["raw_orders::user_id", "stg_orders::customer_id"],
+    ["raw_payments::amount", "stg_payments::amount"],
+    ["raw_payments::id", "stg_payments::payment_id"],
+    ["raw_payments::order_id", "stg_payments::order_id"],
+    ["raw_payments::payment_method", "stg_payments::payment_method"],
+    ["stg_customers::customer_id", "customers::customer_id"],
+    ["stg_customers::first_name", "customers::first_name"],
+    ["stg_customers::last_name", "customers::last_name"],
+    ["stg_orders::customer_id", "orders::customer_id"],
+    ["stg_orders::order_date", "customers::first_order"],
+    ["stg_orders::order_date", "customers::most_recent_order"],
+    ["stg_orders::order_date", "orders::order_date"],
+    ["stg_orders::order_id", "customers::number_of_orders"],
+    ["stg_orders::order_id", "orders::order_id"],
+    ["stg_orders::status", "orders::status"],
+    ["stg_payments::amount", "customers::customer_lifetime_value"],
+    ["stg_payments::amount", "orders::amount"],
+    ["stg_payments::amount", "orders::bank_transfer_amount"],
+    ["stg_payments::amount", "orders::coupon_amount"],
+    ["stg_payments::amount", "orders::credit_card_amount"],
+    ["stg_payments::amount", "orders::gift_card_amount"],
+    ["stg_payments::payment_method", "orders::bank_transfer_amount"],
+    ["stg_payments::payment_method", "orders::coupon_amount"],
+    ["stg_payments::payment_method", "orders::credit_card_amount"],
+    ["stg_payments::payment_method", "orders::gift_card_amount"]
+  ]
 }
