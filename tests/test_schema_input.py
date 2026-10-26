@@ -99,3 +99,8 @@ def test_star_except_is_not_expanded_and_using_joins_keep_their_lineage():
         "FROM pairs LEFT JOIN dt AS tap_on USING (txn_id)", tables)
     assert columns == {"participant_id": ["matched::participant_id"], "customer_id_1": ["unioned::customer_id"]}
     assert unresolved == []
+
+
+def test_quoted_identifiers_name_their_columns_without_quotes():
+    columns, _ = _columns('CREATE TABLE out AS SELECT "Amount" AS amount, x."id" FROM s.orders AS x', {})
+    assert columns == {"amount": ["s.orders::amount"], "id": ["s.orders::id"]}

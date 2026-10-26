@@ -72,10 +72,22 @@ and `* REPLACE` are not expanded.
 Without a manifest, a model is rendered for column lineage when its Jinja is
 limited to comments, `config()`, `ref()`, `source()`, `{% set %}` of string or
 number literals (or lists of them), `{% for %}` loops over those lists,
-`{{ name }}`, and `{% if loop.first %}`/`{% if not loop.last %}` separators.
-Anything else (project or package macros, `var()`, `target`, filters, other
-conditions) leaves the model's columns unresolved, counted as
-`skipped_templates` in the summary. No template code is executed.
+`{{ name }}`, `{% if loop.first %}`/`{% if not loop.last %}` separators, and
+calls to the project's own macros (defined in any `.sql` file of the project)
+whose arguments are literals or loop variables. A macro body is rendered with
+only its parameters in scope, using the same subset plus `{% if param %}`;
+`ref()` and `source()` inside it count as the model's sources. Anything else
+(package macros such as `dbt_utils`, a macro defined twice, method calls such
+as `x.replace(...)`, `var()`, `target`, filters) leaves the model's columns
+unresolved, counted as `skipped_templates` in the summary. No template code is
+executed.
+
+A dbt project runs on one adapter, so its models are traced in the SQL dialect
+that parses the most of them (for example BigQuery when backtick identifiers
+or `* EXCEPT` appear), unless `--dialect` is given; a model that fails in that
+dialect falls back to the best fit. When every candidate parses as many models,
+each model keeps its own best fit. This matters for quoting: `"x"` is a string
+in BigQuery and a column elsewhere.
 
 Every `dbt_project.yml` in the repository is treated as a project root, so
 projects in subfolders (for example `analytics/dbt/`) and several projects in

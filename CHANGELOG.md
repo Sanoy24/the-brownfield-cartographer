@@ -9,6 +9,22 @@ versions may contain breaking changes.
 
 ### Added
 
+- dbt models that call the project's own macros with literal arguments are
+  rendered for column lineage (for example `{{ clean('name') }}`); macro
+  bodies may use the same Jinja subset plus `{% if param %}`, and `ref()` or
+  `source()` inside them count as the model's sources. Package macros and
+  bodies that call Python methods are still skipped.
+- Each dbt project's models are traced in the dialect that parses the most of
+  them, so BigQuery string literals such as `"%Y%m%d"` are no longer read as
+  columns. `--dialect` now also applies to dbt projects.
+
+### Fixed
+
+- Quoted identifiers no longer keep their quotes in column names, and an empty
+  quoted identifier (`""`) counts as a parse error for that dialect.
+- Column lineage no longer copies the whole query for every traced column,
+  which made wide models very slow.
+
 - dbt models whose Jinja includes literal `{% set %}` lists and `{% for %}`
   loops over them (the jaffle_shop payment-method pattern) are rendered for
   column lineage, with `loop.first`/`loop.last` separators and whitespace

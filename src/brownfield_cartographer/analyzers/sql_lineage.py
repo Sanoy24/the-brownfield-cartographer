@@ -210,10 +210,17 @@ def _leaves(node: Node, parent: Node | None = None) -> list[tuple[Node, str | No
     """Leaf nodes with their column name. A pass-through `SELECT *` keeps the name asked for above it."""
     if node.downstream:
         return [leaf for child in node.downstream for leaf in _leaves(child, node)]
-    name = node.name.split(".")[-1]
+    name = _unquote(node.name.split(".")[-1])
     if name == "*":
-        name = parent.name.split(".")[-1] if parent is not None else "*"
+        name = _unquote(parent.name.split(".")[-1]) if parent is not None else "*"
     return [(node, None if name == "*" else name.lower())]
+
+
+def _unquote(name: str) -> str:
+    """`"col"`, `` `col` `` and `[col]` name the column `col`."""
+    if len(name) >= 2 and (name[0], name[-1]) in {('"', '"'), ("`", "`"), ("[", "]")}:
+        return name[1:-1]
+    return name
 
 
 def _is_copy(node: Node) -> bool:
@@ -287,7 +294,7 @@ def _trace_columns(statement: exp.Expression, dialect: str,
             select.replace(exp.alias_(select.copy(), f"_cartographer_col_{index}"))
     outputs = [(s.alias_or_name, s.unalias()) for s in first.selects]
     try:
-        nodes = lineage(None, query, {}, dialect=dialect)
+        nodes = lineage(None, query, {}, dialect=dialect, trim_selects=False)
     except (sqlglot.errors.SqlglotError, ValueError, KeyError):
         return [], [name.lower() for name, _ in outputs]
     columns, unresolved = [], []
@@ -358,6 +365,9 @@ def _parse_text(sql_text: str, source_file: str, dialect: str) -> tuple[list[dic
     for text, span in segments:
         try:
             statement = sqlglot.parse_one(text, dialect=dialect)
+            if any(identifier.quoted and not identifier.this for identifier in statement.find_all(exp.Identifier)):
+                # No database accepts `""` as a name; it is a string literal in another dialect.
+                raise ValueError(f"Empty quoted identifier in {source_file}; the text is probably another SQL dialect")
             if _has_no_lineage(statement):
                 continue
             if not isinstance(statement, SUPPORTED_STATEMENTS):

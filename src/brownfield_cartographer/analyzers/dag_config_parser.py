@@ -34,19 +34,34 @@ _REF_RENDER = re.compile(r"""\{\{\s*ref\(\s*(?:['"]\w+['"]\s*,\s*)?['"](\w+)['"]
 _SOURCE_RENDER = re.compile(r"""\{\{\s*source\(\s*['"](\w+)['"]\s*,\s*['"](\w+)['"]\s*\)\s*\}\}""")
 
 
-def render_simple_model(sql_text: str) -> str | None:
+def render_simple_model(sql_text: str, macros: dict[str, jinja_lite.Macro] | None = None) -> str | None:
     """Render a model whose Jinja is comments, config(), ref(), source() and literal set/for loops.
 
-    Anything else (macros, adapter calls, other conditions) returns None.
+    Calls to `macros` (the project's own, from `project_macros`) are expanded when
+    their arguments are literals. Anything else (package macros, adapter calls,
+    other conditions) returns None.
     """
     text = _JINJA_CONFIG.sub("", _JINJA_COMMENT.sub("", sql_text))
     text = _SOURCE_RENDER.sub(r"\1.\2", _REF_RENDER.sub(r"\1", text))
     if "{{" in text or "{%" in text:
-        rendered = jinja_lite.render(text)
+        rendered = jinja_lite.render(text, macros)
         if rendered is None or "{{" in rendered or "{%" in rendered:
             return None
         text = rendered
     return text.strip().rstrip(";")
+
+
+def project_macros(files: list[Path]) -> dict[str, jinja_lite.Macro]:
+    """Macros defined in a dbt project's `.sql` files, with ref() and source() pre-rendered."""
+    texts = []
+    for path in files:
+        try:
+            text = path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        if "macro" in text:
+            texts.append(_SOURCE_RENDER.sub(r"\1.\2", _REF_RENDER.sub(r"\1", _JINJA_COMMENT.sub("", text))))
+    return jinja_lite.parse_macros(*texts)
 
 
 REF_PATTERN = re.compile(r"""\{\{\s*ref\(\s*['"](\w+)['"]\s*\)\s*\}\}""")
@@ -59,8 +74,37 @@ SOURCE_PATTERN = re.compile(
 # dbt Project Parsing
 # ---------------------------------------------------------------------------
 
+_DIALECT_VOTES: dict[int, str | None] = {}
+
+
+def _project_dialect(texts: list[str]) -> str | None:
+    """The first candidate dialect that parses the most rendered models; None if all parse as many."""
+    import sqlglot
+
+    from brownfield_cartographer.analyzers.sql_lineage import CANDIDATE_DIALECTS
+    key = hash(tuple(texts))
+    if key not in _DIALECT_VOTES:
+        scores = {}
+        for candidate in CANDIDATE_DIALECTS:
+            parsed = 0
+            for text in texts:
+                try:
+                    sqlglot.parse(text, read=candidate)
+                    parsed += 1
+                except (sqlglot.errors.SqlglotError, ValueError, RecursionError):
+                    pass
+            scores[candidate] = parsed
+        best = max(scores.values(), default=0)
+        winners = [name for name, score in scores.items() if score == best]
+        if len(_DIALECT_VOTES) > 32:
+            _DIALECT_VOTES.clear()
+        # When every candidate parses as many models there is no signal; keep per-file choice.
+        _DIALECT_VOTES[key] = winners[0] if best and len(winners) < len(scores) else None
+    return _DIALECT_VOTES[key]
+
+
 def parse_dbt_project(project_root: Path, source_files: tuple[Path, ...] | None = None,
-                      repo_root: Path | None = None) -> dict:
+                      repo_root: Path | None = None, dialect: str | None = None) -> dict:
     """
     Parse a dbt project and extract the full model dependency graph.
 
@@ -104,11 +148,17 @@ def parse_dbt_project(project_root: Path, source_files: tuple[Path, ...] | None 
     if any(not p.is_relative_to(project_root.resolve()) for p in model_dirs):
         raise ValueError("dbt model-paths must stay within the repository")
     model_files = [p for p in source_files if any(p.is_relative_to(d) for d in model_dirs)]
-    if model_files:
-        for sql_file in (p for p in model_files if p.suffix == ".sql"):
+    macros = project_macros([p for p in source_files if p.suffix == ".sql" and p.is_relative_to(project_root)])
+    models = []
+    for sql_file in (p for p in model_files if p.suffix == ".sql"):
+        sql_text = sql_file.read_text(encoding="utf-8", errors="replace")
+        models.append((sql_file, sql_text, render_simple_model(sql_text, macros)))
+    # A project runs on one adapter: trace every model in the dialect that parses the most of them.
+    project_dialect = dialect or _project_dialect([rendered for *_, rendered in models if rendered])
+    if models:
+        for sql_file, sql_text, rendered in models:
             relative_path = sql_file.relative_to(repo_root).as_posix()
             model_name = sql_file.stem
-            sql_text = sql_file.read_text(encoding="utf-8", errors="replace")
 
             # Extract ref() dependencies → these are upstream dbt models
             ref_deps = REF_PATTERN.findall(sql_text)
@@ -120,17 +170,22 @@ def parse_dbt_project(project_root: Path, source_files: tuple[Path, ...] | None 
 
             # Column lineage from the rendered model; models with other Jinja are skipped.
             columns, unresolved = [], []
-            rendered = render_simple_model(sql_text)
             if rendered is None:
                 column_skipped += 1
             else:
                 from brownfield_cartographer.analyzers.sql_lineage import sql_statements
                 errors: list[dict] = []
-                statements = sql_statements(f"CREATE TABLE {model_name} AS {rendered}", relative_path, None, errors)
+                model_sql = f"CREATE TABLE {model_name} AS {rendered}"
+                statements = sql_statements(model_sql, relative_path, project_dialect, errors)
+                if errors and project_dialect and not dialect:
+                    errors = []
+                    statements = sql_statements(model_sql, relative_path, None, errors)
                 if errors or len(statements) != 1:
                     column_skipped += 1
                 else:
                     columns, unresolved = statements[0]["columns"], statements[0]["unresolved_columns"]
+                    # Tables read through macros (a ref() inside a macro body) appear only once rendered.
+                    source_datasets += [t for t in statements[0]["sources"] if t not in source_datasets]
 
             transformations.append(
                 TransformationNode(
