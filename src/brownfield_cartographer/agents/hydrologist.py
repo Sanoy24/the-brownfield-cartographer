@@ -382,7 +382,7 @@ class Hydrologist:
                 logger.info("Detected dbt project at %s — parsing model DAG", project_root)
                 try:
                     dbt_results = parse_dbt_project(project_root, source_files=self.inventory.files,
-                                                    repo_root=repo_root)
+                                                    repo_root=repo_root, dialect=dialect)
                 except ValueError as exc:
                     self.diagnostics.append({"path": (project_root / "dbt_project.yml").relative_to(repo_root).as_posix(),
                                              "error": str(exc), "incomplete": True})
