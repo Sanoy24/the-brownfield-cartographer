@@ -214,6 +214,11 @@ The stdio server exposes `get_architecture`, `find_symbol`, `trace_dependencies`
 previously analyzed index inside a fixed repository scope and never calls a
 model. See [MCP setup](docs/MCP.md) for Claude Code, Codex, and Cursor.
 
+The server is also listed in the official MCP Registry as
+`io.github.Sanoy24/brownfield-cartographer` and on mcprush:
+
+[![Brownfield Cartographer MCP server](https://mcprush.com/badge/brownfield-cartographer-mcp/card.svg)](https://mcprush.com/to/brownfield-cartographer-mcp?ref=badge)
+
 `find` is lexical matching. `impact` reports potential dependents, not a
 guarantee that every consumer will break. Read the persisted coverage and
 diagnostics before relying on results from an incomplete scan.
