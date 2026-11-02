@@ -6,6 +6,8 @@
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 ![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue.svg)
 
+[![Brownfield Cartographer MCP server](https://mcprush.com/badge/brownfield-cartographer-mcp/card.svg)](https://mcprush.com/to/brownfield-cartographer-mcp?ref=badge)
+
 **What breaks if I change this?** Cartographer finds the dependencies your
 language server can't see: a table written by a Python job, transformed in SQL,
 consumed by a dbt model. It maps them statically and locally, with file and line
