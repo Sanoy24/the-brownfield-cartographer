@@ -7,6 +7,13 @@ versions may contain breaking changes.
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-11-04
+
+Extends column lineage to much more real dbt and warehouse SQL: `SELECT *` and
+join columns resolve from known table schemas, and models using literal Jinja
+loops or the project's own macros are rendered. Without a manifest, each dbt
+project is now read in one SQL dialect.
+
 ### Added
 
 - dbt models that call the project's own macros with literal arguments are
@@ -17,20 +24,11 @@ versions may contain breaking changes.
 - Each dbt project's models are traced in the dialect that parses the most of
   them, so BigQuery string literals such as `"%Y%m%d"` are no longer read as
   columns. `--dialect` now also applies to dbt projects.
-
-### Fixed
-
-- Quoted identifiers no longer keep their quotes in column names, and an empty
-  quoted identifier (`""`) counts as a parse error for that dialect.
-- Column lineage no longer copies the whole query for every traced column,
-  which made wide models very slow.
-
 - dbt models whose Jinja includes literal `{% set %}` lists and `{% for %}`
   loops over them (the jaffle_shop payment-method pattern) are rendered for
   column lineage, with `loop.first`/`loop.last` separators and whitespace
   control. Other Jinja is still reported, not guessed. The jaffle_shop columns
   benchmark is now 31/31 at precision 1.00 with no known gaps.
-
 - Column lineage resolves `SELECT *` over tables and unqualified columns in
   joins using the columns each table is known to have: from `CREATE TABLE`
   definitions, from `CREATE ... AS` statements and dbt models whose columns all
@@ -40,6 +38,18 @@ versions may contain breaking changes.
   edges on dbt's jaffle-shop and 77 on Cal-ITP's data-infra warehouse (25
   sampled, none found wrong), and closes the jaffle_shop
   `customer_lifetime_value` benchmark gap at precision 1.00.
+
+### Changed
+
+- Indexes built by earlier versions are rebuilt on the next `analyze`, even for
+  an unchanged repository, so they gain the new column edges.
+
+### Fixed
+
+- Quoted identifiers no longer keep their quotes in column names, and an empty
+  quoted identifier (`""`) counts as a parse error for that dialect.
+- Column lineage no longer copies the whole query for every traced column,
+  which made wide models very slow.
 
 ## [0.9.0] - 2026-10-24
 
