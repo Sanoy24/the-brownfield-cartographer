@@ -182,7 +182,7 @@ jobs:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0   # the merge base must be available
-      - uses: Sanoy24/the-brownfield-cartographer@v0.9.0
+      - uses: Sanoy24/the-brownfield-cartographer@v0.10.0
 ```
 
 The action keeps one comment up to date and also writes the report to the job
